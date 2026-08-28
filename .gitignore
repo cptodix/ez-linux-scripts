@@ -1,0 +1,77 @@
+# ==========================================
+# Linux Scripting Repository .gitignore
+# ==========================================
+
+# --- Secrets, Credentials & Local Configs ---
+.env
+.env.*
+*.pem
+*.key
+*.crt
+id_rsa*
+id_ed25519*
+secrets/
+config.local.*
+*.secret
+
+# --- Editor Temporary & Swap Files ---
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+\#*#
+.#*
+
+# Visual Studio Code & JetBrains
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+
+# --- Script Execution Outputs & Logs ---
+*.log
+*.out
+*.pid
+*.seed
+*.status
+/tmp/
+
+# --- Backup Files (e.g., from sed -i, patch, or text editors) ---
+*.bak
+*.bkp
+*.orig
+*.rej
+
+# --- Python Script Artifacts & Environments ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+*.egg-info/
+
+# --- Compiled Binaries & Shared Objects ---
+*.o
+*.so
+*.a
+*.elf
+
+# --- Archives & Large Compressed Downloads ---
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.bz2
+*.xz
+*.iso
+
+# --- System & Desktop Folder Metadata ---
+.directory
+.DS_Store
+Thumbs.db
