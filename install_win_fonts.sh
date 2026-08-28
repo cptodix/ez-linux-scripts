@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Define directories
+FONT_DIR="$HOME/.local/share/fonts/ms-fonts"
+TEMP_DIR="$HOME/Downloads/ms_fonts_ultimate_temp"
+
+echo "========================================="
+echo " Creating local Microsoft font directory"
+echo "========================================="
+mkdir -p "$FONT_DIR"
+mkdir -p "$TEMP_DIR"
+
+echo "========================================="
+echo " Downloading Complete Windows & 365 Suites"
+echo "========================================="
+
+# 1. Classic & System Fonts (Times New Roman, Wingdings, Webdings, Arial, Calibri, etc.)
+echo "-> Fetching base Windows OS font vault..."
+wget -O "$TEMP_DIR/windows-core.zip" https://github.com/pjobson/Microsoft-Fonts/archive/refs/heads/master.zip
+
+# 2. Modern Office 365 Cloud Fonts (Bierstadt, Seaford, Tenorite, Grandview, etc.)
+echo "-> Fetching Microsoft 365 dynamic Cloud Font database..."
+wget -O "$TEMP_DIR/office-365.zip" https://github.com/pjobson/Microsoft-365-Fonts/archive/refs/heads/master.zip
+
+# 3. Modern Office Default (Aptos family)
+echo "-> Fetching Aptos production package..."
+wget -O "$TEMP_DIR/aptos.zip" "https://download.microsoft.com/download/8/6/0/860a94fa-7feb-44ef-ac79-c072d9113d69/Microsoft%20Aptos%20Fonts.zip"
+
+echo "========================================="
+echo " Extracting and Mass-Installing Fonts"
+echo "========================================="
+
+# Unpack Base Windows Fonts
+echo "-> Processing system fonts..."
+unzip -q "$TEMP_DIR/windows-core.zip" -d "$TEMP_DIR/core_extracted"
+find "$TEMP_DIR/core_extracted" -type f \( -name "*.ttf" -o -name "*.TTF" -o -name "*.otf" -o -name "*.OTF" \) -exec mv {} "$FONT_DIR/" \;
+
+# Unpack Microsoft 365 Cloud Fonts
+echo "-> Processing modern cloud fonts..."
+unzip -q "$TEMP_DIR/office-365.zip" -d "$TEMP_DIR/365_extracted"
+find "$TEMP_DIR/365_extracted" -type f \( -name "*.ttf" -o -name "*.TTF" -o -name "*.otf" -o -name "*.OTF" \) -exec mv {} "$FONT_DIR/" \;
+
+# Unpack Aptos Fonts
+echo "-> Processing Aptos suite..."
+unzip -q "$TEMP_DIR/aptos.zip" -d "$FONT_DIR/"
+
+echo "========================================="
+echo " Cleaning Up Temporary Archives"
+echo "========================================="
+rm -rf "$TEMP_DIR"
+
+echo "========================================="
+echo " Building Font Architecture Matrix"
+echo "========================================="
+fc-cache -fv
+
+echo "========================================="
+echo " Completed! Total parity with Windows 11 & O365 achieved."
+echo "========================================="
