@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+SETTINGS_FILE="$HOME/.gemini/antigravity-cli/settings.json"
+mkdir -p "$(dirname "$SETTINGS_FILE")"
+
+# Ensure settings.json exists
+if [ ! -f "$SETTINGS_FILE" ]; then
+    echo "{}" > "$SETTINGS_FILE"
+fi
+
+MODE="$1"
+shift # Remove first argument so remaining args pass to 'agy'
+
+case "$MODE" in
+    api|key|gemini)
+        # Use provided key or ask for one if GEMINI_API_KEY isn't exported
+        if [ -n "$1" ] && [[ "$1" == AIza* ]]; then
+            export GEMINI_API_KEY="$1"
+            shift
+        elif [ -z "$GEMINI_API_KEY" ]; then
+            echo "Please provide a Gemini API key starting with AIza"
+            exit 1
+        fi
+        ;;
+esac
+
+exec agy "$@"
