@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+set -e
+
+# Target directories
+BIN_DIR="$HOME/.local/bin"
+SHARE_DIR="$HOME/.local/share"
+APP_DIR="$HOME/.local/share/applications"
+
+mkdir -p "$BIN_DIR" "$SHARE_DIR" "$APP_DIR"
+
+if [ -z "$1" ]; then
+    echo "Usage: ez-install <path-to-archive>"
+    echo "Supports: .tar.gz, .tgz, .tar.xz, .txz, .tar.bz2, .tbz2, .zip, .AppImage"
+    exit 1
+fi
+
+ARCHIVE="$1"
+if [ ! -f "$ARCHIVE" ]; then
+    echo "Error: Archive file '$ARCHIVE' not found."
+    exit 1
+fi
+
+# Create a temporary working directory
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+echo "========================================="
+echo " Extracting archive..."
+echo "========================================="
+
+filename=$(basename "$ARCHIVE")
+extension="${filename##*.}"
+
+# Handle AppImage special case
+if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
+    app_slug=$(echo "$filename" | sed 's/\.[Aa]pp[Ii]mage$//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+    app_dir="$SHARE_DIR/$app_slug"
+    mkdir -p "$app_dir"
+    target_bin="$app_dir/$filename"
+    cp -f "$ARCHIVE" "$target_bin"
+    chmod +x "$target_bin"
+    
+    # Try extracting AppImage contents for icon/desktop if possible
+    cd "$TEMP_DIR"
+    "$target_bin" --appimage-extract &>/dev/null || true
+    if [ -d "$TEMP_DIR/squashfs-root" ]; then
+        extracted_root="$TEMP_DIR/squashfs-root"
+    else
+        extracted_root="$app_dir"
+    fi
+else
+    # Extract based on extension
+    cd "$TEMP_DIR"
+    case "$filename" in
+        *.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.bz2|*.tbz2)
+            tar -xf "$ARCHIVE"
+            ;;
+        *.zip)
+            unzip -q "$ARCHIVE"
+            ;;
+        *)
+            # Try generic tar or unzip
+            tar -xf "$ARCHIVE" 2>/dev/null || unzip -q "$ARCHIVE" 2>/dev/null || {
+                echo "Error: Unknown or unsupported archive format."
+                exit 1
+            }
+            ;;
+    esac
+    
+    # Check top-level items in TEMP_DIR
+    top_items=("$TEMP_DIR"/*)
+    if [ ${#top_items[@]} -eq 1 ] && [ -d "${top_items[0]}" ]; then
+        extracted_root="${top_items[0]}"
+        app_slug=$(basename "$extracted_root" | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
+    else
+        extracted_root="$TEMP_DIR"
+        app_slug=$(echo "$filename" | sed -E 's/\.(tar\.(gz|xz|bz2)|tgz|txz|tbz2|zip)$//I' | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
+    fi
+    
+    app_dir="$SHARE_DIR/$app_slug"
+    rm -rf "$app_dir"
+    mkdir -p "$app_dir"
+    cp -r "$extracted_root"/* "$app_dir/"
+    extracted_root="$app_dir"
+fi
+
+# Generate Normie display name (e.g. android-studio or AndroidStudio -> Android Studio)
+raw_name="$app_slug"
+pretty_name=$(echo "$raw_name" | sed 's/-/ /g; s/_/ /g' | sed -E 's/([a-z0-9])([A-Z])/\1 \2/g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
+echo "Detected App Name: $pretty_name (Slug: $app_slug)"
+
+# Find Main Executable
+echo "Searching for executable binary..."
+exec_candidates=()
+while IFS= read -r file; do
+    # Skip directories, check if executable
+    if [ -f "$file" ] && [ -x "$file" ]; then
+        # filter out shared libraries, python modules, text files, etc.
+        case "$file" in
+            *.so|*.so.*|*.a|*.h|*.c|*.py|*.sh|*.json|*.txt|*.md) continue ;;
+        esac
+        exec_candidates+=("$file")
+    fi
+done < <(find "$extracted_root" -type f)
+
+if [ ${#exec_candidates[@]} -eq 0 ]; then
+    # Fallback: check any file if strict executable bit wasn't set
+    while IFS= read -r file; do
+        [ -f "$file" ] && exec_candidates+=("$file")
+    done < <(find "$extracted_root" -maxdepth 2 -type f)
+fi
+
+if [ ${#exec_candidates[@]} -eq 1 ]; then
+    main_bin="${exec_candidates[0]}"
+elif [ ${#exec_candidates[@]} -gt 1 ]; then
+    echo "Multiple potential executables found:"
+    select bin in "${exec_candidates[@]}"; do
+        if [ -n "$bin" ]; then
+            main_bin="$bin"
+            break
+        fi
+    done
+else
+    echo "Error: No executable binary found in archive."
+    exit 1
+fi
+
+bin_filename=$(basename "$main_bin")
+symlink_path="$BIN_DIR/$app_slug"
+ln -sf "$main_bin" "$symlink_path"
+chmod +x "$main_bin"
+echo "Created symlink: $symlink_path -> $main_bin"
+
+# Find Icon
+icon_path=""
+while IFS= read -r icon; do
+    if [[ "$icon" == *.png ]] || [[ "$icon" == *.svg ]]; then
+        icon_path="$icon"
+        break
+    fi
+done < <(find "$extracted_root" -type f \( -name "*.png" -o -name "*.svg" \) | sort -r)
+
+if [ -n "$icon_path" ]; then
+    echo "Found icon: $icon_path"
+else
+    echo "No icon found in archive."
+fi
+
+# Categories Gathering
+echo "Gathering system categories..."
+declare -A cat_map
+while IFS= read -r desktop_file; do
+    if [ -f "$desktop_file" ]; then
+        while IFS= read -r line; do
+            if [[ "$line" == Categories=* ]]; then
+                cats="${line#Categories=}"
+                IFS=';' read -ra c_array <<< "$cats"
+                for c in "${c_array[@]}"; do
+                    c=$(echo "$c" | xargs)
+                    [ -n "$c" ] && cat_map["$c"]=1
+                done
+            fi
+        done < "$desktop_file"
+    fi
+done < <(find /usr/share/applications ~/.local/share/applications -name "*.desktop" 2>/dev/null)
+
+sorted_cats=($(printf '%s\n' "${!cat_map[@]}" | sort))
+
+echo "========================================="
+echo " Select Desktop Categories for $pretty_name:"
+echo "========================================="
+for i in "${!sorted_cats[@]}"; do
+    echo "$((i+1))) ${sorted_cats[$i]}"
+done
+echo "$(( ${#sorted_cats[@]} + 1 ))) [Enter a new custom category]"
+
+read -p "Enter number(s) separated by space (default: Utility): " cat_selection
+
+chosen_cats="Utility;Application;"
+if [ -n "$cat_selection" ]; then
+    chosen_cats=""
+    for num in $cat_selection; do
+        if [ "$num" -eq $(( ${#sorted_cats[@]} + 1 )) ]; then
+            read -p "Enter custom category name (e.g. Development, AudioVideo): " custom_cat
+            [ -n "$custom_cat" ] && chosen_cats+="$custom_cat;"
+        elif [ "$num" -ge 1 ] && [ "$num" -le "${#sorted_cats[@]}" ]; then
+            idx=$((num-1))
+            chosen_cats+="${sorted_cats[$idx]};"
+        fi
+    done
+fi
+[ -z "$chosen_cats" ] && chosen_cats="Utility;Application;"
+
+# Create .desktop file
+desktop_file="$APP_DIR/${app_slug}.desktop"
+echo "Creating .desktop shortcut: $desktop_file"
+
+cat << EOF > "$desktop_file"
+[Desktop Entry]
+Type=Application
+Name=$pretty_name
+Exec=$symlink_path
+Terminal=false
+Categories=$chosen_cats
+EOF
+
+if [ -n "$icon_path" ]; then
+    echo "Icon=$icon_path" >> "$desktop_file"
+fi
+
+chmod +x "$desktop_file"
+
+if command -v update-desktop-database &> /dev/null; then
+    update-desktop-database "$APP_DIR" 2>/dev/null || true
+fi
+
+echo "========================================="
+echo " Successfully installed $pretty_name!"
+echo " Binary: $symlink_path"
+echo " Desktop Entry: $desktop_file"
+echo "========================================="
