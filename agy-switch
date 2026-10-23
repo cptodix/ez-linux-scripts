@@ -18,10 +18,47 @@ case "$MODE" in
             export GEMINI_API_KEY="$1"
             shift
         elif [ -z "$GEMINI_API_KEY" ]; then
-            echo "Please provide a Gemini API key starting with AIza"
-            exit 1
+            echo -n "Enter Google AI Studio API Key: "
+            read -r GEMINI_API_KEY
+            export GEMINI_API_KEY
         fi
+
+        # Set modelProvider to gemini
+        python3 -c "
+import json, os
+p = os.path.expanduser('$SETTINGS_FILE')
+try:
+    with open(p, 'r') as f: data = json.load(f)
+except Exception: data = {}
+data['modelProvider'] = 'gemini'
+with open(p, 'w') as f: json.dump(data, f, indent=2)
+"
+        echo "[agy-switch] Switched to Gemini API Key mode."
+        agy "$@"
+        ;;
+
+    oauth|gauth|google)
+        # Remove modelProvider key from settings
+        python3 -c "
+import json, os
+p = os.path.expanduser('$SETTINGS_FILE')
+try:
+    with open(p, 'r') as f: data = json.load(f)
+except Exception: data = {}
+data.pop('modelProvider', None)
+with open(p, 'w') as f: json.dump(data, f, indent=2)
+"
+        echo "[agy-switch] Switched to Google OAuth mode."
+        unset GEMINI_API_KEY
+        agy "$@"
+        ;;
+
+    *)
+        echo "Usage: agy-switch [api|oauth] [optional_key_or_flags]"
+        echo ""
+        echo "Examples:"
+        echo "  agy-switch api                   # Switch to API key mode and launch agy"
+        echo "  agy-switch api AIzaSy...         # Set specific key and launch agy"
+        echo "  agy-switch oauth                 # Switch to Google OAuth and launch agy"
         ;;
 esac
-
-exec agy "$@"
