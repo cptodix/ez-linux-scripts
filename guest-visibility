@@ -13,10 +13,53 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-mkdir -p "$CONF_DIR"
+# Ensure SDDM configuration directory exists
+if [[ ! -d "/etc/sddm" && ! -d "$CONF_DIR" ]]; then
+   echo "Warning: SDDM configuration directory not found. Is SDDM installed?"
+fi
+
+is_user_exist() {
+    id "$TARGET_USER" &>/dev/null
+}
+
+ensure_user_exist() {
+    if ! is_user_exist; then
+        echo "User '$TARGET_USER' does not exist. Creating guest account..."
+        # Create user with home directory and bash shell
+        useradd -m -s /bin/bash "$TARGET_USER"
+        
+        # Set default password 'guest' so guests can easily log in
+        echo "${TARGET_USER}:${TARGET_USER}" | chpasswd
+        echo "Created user '$TARGET_USER' with password '${TARGET_USER}'."
+    fi
+}
 
 is_hidden() {
     [[ -f "$CONF_FILE" ]] && grep -qE "^HideUsers=.*\b${TARGET_USER}\b" "$CONF_FILE"
+}
+
+show_status() {
+    echo "========================================="
+    echo " Guest Account Status: $TARGET_USER"
+    echo "========================================="
+    if is_user_exist; then
+        echo " -> System Account: Exists"
+    else
+        echo " -> System Account: Does NOT exist (will be created when shown)"
+    fi
+    
+    if is_hidden; then
+        echo " -> SDDM Visibility: HIDDEN (Strangers cannot see/access)"
+    else
+        echo " -> SDDM Visibility: VISIBLE (Available on login screen)"
+    fi
+    
+    if [[ -f "$CONF_FILE" ]]; then
+        echo ""
+        echo "Current hide-users.conf content:"
+        cat "$CONF_FILE"
+    fi
+    echo "========================================="
 }
 
 hide_user() {
@@ -42,6 +85,9 @@ hide_user() {
 }
 
 unhide_user() {
+    # Ensure the guest account exists when making it visible for strangers
+    ensure_user_exist
+
     if ! is_hidden; then
         echo "User '$TARGET_USER' is already visible in SDDM."
         return
@@ -57,7 +103,7 @@ unhide_user() {
         echo "Removed empty configuration file ($CONF_FILE)."
     fi
 
-    echo "Done: User '$TARGET_USER' is now VISIBLE in SDDM."
+    echo "Done: User '$TARGET_USER' is now VISIBLE in SDDM (Password: '$TARGET_USER')."
 }
 
 case "$ACTION" in
@@ -74,8 +120,16 @@ case "$ACTION" in
             hide_user
         fi
         ;;
+    status|list)
+        show_status
+        ;;
     *)
-        echo "Usage: sudo $0 [username] [hide|unhide|toggle]"
+        echo "Usage: sudo $0 [username] [hide|unhide|toggle|status]"
+        echo "Examples:"
+        echo "  sudo guest-visibility          # Toggle default 'guest' account visibility"
+        echo "  sudo guest-visibility status   # Check guest account & visibility status"
+        echo "  sudo guest-visibility hide     # Hide guest account"
+        echo "  sudo guest-visibility unhide   # Make guest account visible (creates user if missing)"
         exit 1
         ;;
 esac

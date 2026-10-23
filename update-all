@@ -1,16 +1,39 @@
 #!/bin/bash
 
-# Define the update sequence
-# 1. Refresh zypper repositories
-# 2. Perform distribution upgrade (Tumbleweed style)
-# 3. Update all System-wide Flatpaks safely using sudo
-# 4. Remove unused Flatpak runtimes using sudo
-
-konsole --noclose -e /bin/bash -c "
-echo '--- Starting System Refresh & Update ---';
+# Define update sequence command string
+UPDATE_CMD="
+echo '========================================='
+echo ' Starting System Refresh & Update (openSUSE)'
+echo '========================================='
 sudo zypper ref && sudo zypper dup && \
-echo '--- Starting Flatpak Updates ---';
+echo '========================================='
+echo ' Starting Flatpak Updates'
+echo '========================================='
 sudo flatpak update -y && \
-echo '--- Cleaning up unused Flatpaks ---';
+echo '========================================='
+echo ' Cleaning up unused Flatpaks'
+echo '========================================='
 sudo flatpak uninstall --unused -y && \
-echo '--- All updates completed! ---'"
+echo '========================================='
+echo ' All updates completed successfully!'
+echo '========================================='
+read -p 'Press Enter to close this window...'
+"
+
+# Detect terminal emulator dynamically
+if command -v konsole &> /dev/null; then
+    konsole --noclose -e /bin/bash -c "$UPDATE_CMD"
+elif command -v gnome-terminal &> /dev/null; then
+    gnome-terminal -- /bin/bash -c "$UPDATE_CMD"
+elif command -v xfce4-terminal &> /dev/null; then
+    xfce4-terminal --hold -e "/bin/bash -c '$UPDATE_CMD'"
+elif command -v alacritty &> /dev/null; then
+    alacritty -e /bin/bash -c "$UPDATE_CMD"
+elif command -v kitty &> /dev/null; then
+    kitty /bin/bash -c "$UPDATE_CMD"
+elif command -v x-terminal-emulator &> /dev/null; then
+    x-terminal-emulator -e /bin/bash -c "$UPDATE_CMD"
+else
+    # Fallback to running directly in current shell if no GUI terminal found
+    /bin/bash -c "$UPDATE_CMD"
+fi

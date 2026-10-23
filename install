@@ -5,16 +5,76 @@ set -e
 BIN_DIR="$HOME/.local/bin"
 APP_DIR="$HOME/.local/share/applications"
 
-mkdir -p "$BIN_DIR"
-mkdir -p "$APP_DIR"
-
 # Get the directory where this script resides
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DRY_RUN=false
+UNINSTALL=false
+
+# Parse arguments
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --uninstall)
+            UNINSTALL=true
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--dry-run] [--uninstall]"
+            echo "  --uninstall   Remove all scripts from $BIN_DIR and shortcuts from $APP_DIR"
+            echo "  --dry-run     Preview installation actions without making changes"
+            exit 0
+            ;;
+    esac
+done
+
+if [ "$UNINSTALL" = true ]; then
+    echo "========================================="
+    echo " Uninstalling scripts and shortcuts..."
+    echo "========================================="
+    
+    for file in "$REPO_DIR"/*; do
+        [ -d "$file" ] && continue
+        filename=$(basename "$file")
+        case "$filename" in
+            install|README.md|LICENSE|.*) continue ;;
+        esac
+        
+        target_bin="$BIN_DIR/$filename"
+        target_desktop="$APP_DIR/${filename}.desktop"
+        
+        if [ -f "$target_bin" ]; then
+            echo " -> Removing binary: $target_bin"
+            [ "$DRY_RUN" = false ] && rm -f "$target_bin"
+        fi
+        if [ -f "$target_desktop" ]; then
+            echo " -> Removing desktop shortcut: $target_desktop"
+            [ "$DRY_RUN" = false ] && rm -f "$target_desktop"
+        fi
+    done
+    
+    if command -v update-desktop-database &> /dev/null && [ "$DRY_RUN" = false ]; then
+        update-desktop-database "$APP_DIR" 2>/dev/null || true
+    fi
+    
+    echo "========================================="
+    echo " Uninstallation complete!"
+    echo "========================================="
+    exit 0
+fi
+
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN MODE - No changes will be written]"
+fi
 
 echo "========================================="
 echo " Installing scripts to $BIN_DIR"
 echo " and generating .desktop shortcuts in $APP_DIR"
 echo "========================================="
+
+[ "$DRY_RUN" = false ] && mkdir -p "$BIN_DIR"
+[ "$DRY_RUN" = false ] && mkdir -p "$APP_DIR"
 
 # Dynamically iterate over all files in the repository root
 for file in "$REPO_DIR"/*; do
@@ -32,18 +92,19 @@ for file in "$REPO_DIR"/*; do
     
     target_path="$BIN_DIR/$filename"
     
-    echo " -> Installing script: $filename"
-    cp -f "$file" "$target_path"
-    chmod +x "$target_path"
+    echo " -> Installing script: $filename -> $target_path"
+    if [ "$DRY_RUN" = false ]; then
+        cp -f "$file" "$target_path"
+        chmod +x "$target_path"
+    fi
     
     # Generate .desktop shortcut
     desktop_file="$APP_DIR/${filename}.desktop"
-    
-    # Create a nice human-readable name from filename (e.g., update-all -> Update All)
     pretty_name=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
     
-    echo " -> Creating desktop shortcut: ${filename}.desktop"
-    cat << EOF > "$desktop_file"
+    echo " -> Creating desktop shortcut: $desktop_file"
+    if [ "$DRY_RUN" = false ]; then
+        cat << EOF > "$desktop_file"
 [Desktop Entry]
 Type=Application
 Name=$pretty_name
@@ -52,11 +113,12 @@ Terminal=true
 Categories=Utility;Application;
 Comment=Script: $pretty_name
 EOF
-    chmod +x "$desktop_file"
+        chmod +x "$desktop_file"
+    fi
 done
 
 # Update desktop database if available
-if command -v update-desktop-database &> /dev/null; then
+if command -v update-desktop-database &> /dev/null && [ "$DRY_RUN" = false ]; then
     update-desktop-database "$APP_DIR" 2>/dev/null || true
 fi
 
