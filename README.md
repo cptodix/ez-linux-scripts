@@ -1,1 +1,35 @@
-# opensuse_scripts
+# OpenSUSE Scripts
+
+A collection of personal utility and automation scripts for openSUSE and Linux environments, optimized for quick terminal use.
+
+## Scripts Overview
+
+| Script Name | Description |
+| ----------- | ----------- |
+| [`install`](install) | Dynamic installer script that copies all current and future scripts to `~/.local/bin`, makes them executable, and overwrites existing ones. |
+| [`update-all`](update-all) | Refreshes Zypper repositories, performs distribution upgrade (`dup`), updates system-wide Flatpaks, and cleans up unused runtimes. |
+| [`install-win-fonts`](install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites to user local fonts directory. |
+| [`warp-toggle`](warp-toggle) | Toggles Cloudflare WARP connection status on/off with desktop notifications (`notify-send`). |
+| [`guest-visibility`](guest-visibility) | Manages SDDM login manager guest account visibility (hide/show/toggle) on openSUSE (requires `sudo`). |
+| [`agy-switch`](agy-switch) | Utility script for managing Gemini API keys and settings modes for `antigravity-cli`. |
+
+## Installation
+
+To install or update all scripts to `~/.local/bin` automatically:
+
+```bash
+./install
+```
+
+## Usage
+
+Make sure `~/.local/bin` is in your `$PATH`.
+
+```bash
+# Example usage
+update-all
+install-win-fonts
+warp-toggle
+sudo guest-visibility guest toggle
+agy-switch api YOUR_API_KEY
+```

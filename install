@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -e
+
+# Target directories
+BIN_DIR="$HOME/.local/bin"
+APP_DIR="$HOME/.local/share/applications"
+
+mkdir -p "$BIN_DIR"
+mkdir -p "$APP_DIR"
+
+# Get the directory where this script resides
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "========================================="
+echo " Installing scripts to $BIN_DIR"
+echo " and generating .desktop shortcuts in $APP_DIR"
+echo "========================================="
+
+# Dynamically iterate over all files in the repository root
+for file in "$REPO_DIR"/*; do
+    # Skip if it's a directory
+    [ -d "$file" ] && continue
+    
+    filename=$(basename "$file")
+    
+    # Skip installer itself, documentation, license, and hidden files
+    case "$filename" in
+        install|README.md|LICENSE|.*)
+            continue
+            ;;
+    esac
+    
+    target_path="$BIN_DIR/$filename"
+    
+    echo " -> Installing script: $filename"
+    cp -f "$file" "$target_path"
+    chmod +x "$target_path"
+    
+    # Generate .desktop shortcut
+    desktop_file="$APP_DIR/${filename}.desktop"
+    
+    # Create a nice human-readable name from filename (e.g., update-all -> Update All)
+    pretty_name=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
+    
+    echo " -> Creating desktop shortcut: ${filename}.desktop"
+    cat << EOF > "$desktop_file"
+[Desktop Entry]
+Type=Application
+Name=$pretty_name
+Exec=$target_path
+Terminal=true
+Categories=Utility;Application;
+Comment=Script: $pretty_name
+EOF
+    chmod +x "$desktop_file"
+done
+
+# Update desktop database if available
+if command -v update-desktop-database &> /dev/null; then
+    update-desktop-database "$APP_DIR" 2>/dev/null || true
+fi
+
+echo "========================================="
+echo " Installation and shortcut generation complete!"
+echo "========================================="
