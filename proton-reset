@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+set -e
+
+BACKUP_DIR="$HOME/proton-backups"
+mkdir -p "$BACKUP_DIR"
+
+# Function to find all Steam library paths
+get_steam_libraries() {
+    local base_paths=(
+        "$HOME/.local/share/Steam"
+        "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam"
+    )
+    
+    local libs=()
+    for bp in "${base_paths[@]}"; do
+        if [ -d "$bp" ]; then
+            libs+=("$bp")
+            local vdf="$bp/steamapps/libraryfolders.vdf"
+            if [ -f "$vdf" ]; then
+                while IFS= read -r line; do
+                    if [[ "$line" =~ \"path\"\s+\"([^\"]+)\" ]]; then
+                        local p="${BASH_REMATCH[1]}"
+                        p="${p//\\\\/\/}"
+                        if [ -d "$p" ] && [[ ! " ${libs[*]} " =~ " ${p} " ]]; then
+                            libs+=("$p")
+                        fi
+                    fi
+                done < "$vdf"
+            fi
+        fi
+    done
+    echo "${libs[@]}"
+}
+
+# Function to parse installed games across all libraries
+get_installed_games() {
+    local libs=($(get_steam_libraries))
+    for lib in "${libs[@]}"; do
+        local steamapps="$lib/steamapps"
+        if [ -d "$steamapps" ]; then
+            for acf in "$steamapps"/appmanifest_*.acf; do
+                [ -f "$acf" ] || continue
+                local appid=""
+                local name=""
+                while IFS= read -r line; do
+                    if [[ "$line" =~ \"appid\"\s+\"([0-9]+)\" ]]; then
+                        appid="${BASH_REMATCH[1]}"
+                    elif [[ "$line" =~ \"name\"\s+\"([^\"]+)\" ]]; then
+                        name="${BASH_REMATCH[1]}"
+                    fi
+                done < "$acf"
+                if [ -n "$appid" ] && [ -n "$name" ]; then
+                    echo "$appid|$name|$lib"
+                fi
+            done
+        fi
+    done | sort -t'|' -k2
+}
+
+# Handle restore mode
+do_restore() {
+    local backup_file="$1"
+    if [ ! -f "$backup_file" ]; then
+        echo "Error: Backup file '$backup_file' not found."
+        exit 1
+    fi
+    
+    echo "Scanning installed games for restore target..."
+    local games=()
+    while IFS='|' read -r appid name lib; do
+        [ -n "$appid" ] && games+=("$appid|$name|$lib")
+    done < <(get_installed_games)
+    
+    if [ ${#games[@]} -eq 0 ]; then
+        echo "Error: No installed Steam games found."
+        exit 1
+    fi
+    
+    echo "========================================="
+    echo " Select Game to Restore Backup Into:"
+    echo "========================================="
+    for i in "${!games[@]}"; do
+        IFS='|' read -r appid name lib <<< "${games[$i]}"
+        echo "$((i+1))) $name (AppID: $appid)"
+    done
+    
+    read -p "Enter game number: " choice
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#games[@]}" ]; then
+        echo "Invalid selection."
+        exit 1
+    fi
+    
+    IFS='|' read -r appid name lib <<< "${games[$((choice-1))]}"
+    local compatdata_dir="$lib/steamapps/compatdata/$appid"
+    
+    mkdir -p "$compatdata_dir"
+    echo "Restoring backup into: $compatdata_dir"
+    tar -xzf "$backup_file" -C "$compatdata_dir"
+    echo "Restore completed successfully for $name!"
+    exit 0
+}
+
+# Parse flags
+if [ "$1" = "--restore" ]; then
+    if [ -z "$2" ]; then
+        echo "Usage: proton-reset --restore <backup-tar-gz-file>"
+        exit 1
+    fi
+    do_restore "$2"
+fi
+
+echo "Scanning Steam libraries and installed games..."
+games=()
+while IFS='|' read -r appid name lib; do
+    [ -n "$appid" ] && games+=("$appid|$name|$lib")
+done < <(get_installed_games)
+
+if [ ${#games[@]} -eq 0 ]; then
+    echo "Error: No installed Steam games found."
+    exit 1
+fi
+
+echo "========================================="
+echo " Installed Steam Games:"
+echo "========================================="
+for i in "${!games[@]}"; do
+    IFS='|' read -r appid name lib <<< "${games[$i]}"
+    echo "$((i+1))) $name (AppID: $appid)"
+done
+
+read -p "Enter game number(s) to reset compatdata (space-separated): " choices
+
+for choice in $choices; do
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#games[@]}" ]; then
+        echo "Invalid selection: $choice"
+        continue
+    fi
+    
+    IFS='|' read -r appid name lib <<< "${games[$((choice-1))]}"
+    compatdata_dir="$lib/steamapps/compatdata/$appid"
+    
+    echo ""
+    echo "-----------------------------------------"
+    echo " Game: $name (AppID: $appid)"
+    echo " Target Compatdata Path: $compatdata_dir"
+    echo "-----------------------------------------"
+    
+    if [ ! -d "$compatdata_dir" ]; then
+        echo "Notice: Compatdata folder does not exist yet for this game."
+        continue
+    fi
+    
+    # 1. Backup user saves and configs before deletion
+    user_pfx="$compatdata_dir/pfx/drive_c/users/steamuser"
+    if [ -d "$user_pfx" ]; then
+        backup_filename="proton-backup-${appid}-${name// /_}-$(date +%Y%m%d_%H%M%S).tar.gz"
+        backup_path="$BACKUP_DIR/$backup_filename"
+        echo "Backing up user saves and configs..."
+        
+        pushd "$user_pfx" > /dev/null
+        backup_items=()
+        for sub in "Documents" "Saved Games" "AppData/Local" "AppData/Roaming"; do
+            if [ -d "$sub" ]; then
+                backup_items+=("$sub")
+            fi
+        done
+        
+        if [ ${#backup_items[@]} -gt 0 ]; then
+            tar -czf "$backup_path" "${backup_items[@]}" 2>/dev/null || true
+            echo "Backup saved to: $backup_path"
+        else
+            echo "No standard save/config folders found to backup."
+        fi
+        popd > /dev/null
+    else
+        echo "No wine steamuser profile found inside compatdata; skipping backup."
+    fi
+    
+    # 2. Confirmation before deletion
+    read -p "Are you SURE you want to delete compatdata for '$name'? [y/N]: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Deleting: $compatdata_dir"
+        rm -rf "$compatdata_dir"
+        echo "Successfully reset compatdata for $name."
+    else
+        echo "Skipped deletion for $name."
+    fi
+done
+
+echo ""
+echo "========================================="
+echo " Proton reset process finished!"
+echo "========================================="
