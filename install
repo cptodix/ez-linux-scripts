@@ -38,7 +38,7 @@ if [ "$UNINSTALL" = true ]; then
         [ -d "$file" ] && continue
         filename=$(basename "$file")
         case "$filename" in
-            install|README.md|LICENSE|.*) continue ;;
+            install|README.md|LICENSE|AGENTS.md|.*) continue ;;
         esac
         
         target_bin="$BIN_DIR/$filename"
@@ -85,7 +85,7 @@ for file in "$REPO_DIR"/*; do
     
     # Skip installer itself, documentation, license, and hidden files
     case "$filename" in
-        install|README.md|LICENSE|.*)
+        install|README.md|LICENSE|AGENTS.md|.*)
             continue
             ;;
     esac

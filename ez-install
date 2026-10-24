@@ -5,20 +5,85 @@ set -e
 BIN_DIR="$HOME/.local/bin"
 SHARE_DIR="$HOME/.local/share"
 APP_DIR="$HOME/.local/share/applications"
+APPLICATIONS_DIR="$HOME/Applications"
 
-mkdir -p "$BIN_DIR" "$SHARE_DIR" "$APP_DIR"
+mkdir -p "$BIN_DIR" "$SHARE_DIR" "$APP_DIR" "$APPLICATIONS_DIR"
 
 if [ -z "$1" ]; then
-    echo "Usage: ez-install <path-to-archive>"
+    echo "Usage: ez-install <path-to-archive-or-appimage>"
     echo "Supports: .tar.gz, .tgz, .tar.xz, .txz, .tar.bz2, .tbz2, .zip, .AppImage"
     exit 1
 fi
 
 ARCHIVE="$1"
 if [ ! -f "$ARCHIVE" ]; then
-    echo "Error: Archive file '$ARCHIVE' not found."
+    echo "Error: File '$ARCHIVE' not found."
     exit 1
 fi
+
+filename=$(basename "$ARCHIVE")
+extension="${filename##*.}"
+
+# ==========================================
+# Handle AppImage special case via GearLever
+# ==========================================
+if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
+    echo "========================================="
+    echo " Processing AppImage: $filename"
+    echo "========================================="
+    
+    # 1. Copy .AppImage to ~/Applications
+    target_appimage="$APPLICATIONS_DIR/$filename"
+    echo "-> Copying AppImage to $target_appimage"
+    cp -f "$ARCHIVE" "$target_appimage"
+    chmod +x "$target_appimage"
+    
+    # 2. Check if GearLever is installed, install if missing
+    gearlever_cmd=""
+    if command -v gearlever &> /dev/null; then
+        gearlever_cmd="gearlever"
+    elif flatpak info it.mijorus.gearlever &> /dev/null; then
+        gearlever_cmd="flatpak run it.mijorus.gearlever"
+    else
+        echo "-> GearLever not found. Installing GearLever..."
+        installed_via_native=false
+        
+        # Prioritize native package manager (zypper on openSUSE)
+        if command -v zypper &> /dev/null; then
+            echo "-> Attempting installation via zypper..."
+            if sudo zypper install -y gearlever; then
+                installed_via_native=true
+                gearlever_cmd="gearlever"
+            fi
+        fi
+        
+        # Fallback to Flatpak if native package manager failed or is unavailable
+        if [ "$installed_via_native" = false ]; then
+            echo "-> Installing GearLever from Flathub (Flatpak)..."
+            if ! command -v flatpak &> /dev/null; then
+                echo "Error: Neither zypper nor flatpak found to install GearLever."
+                exit 1
+            }
+            flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+            flatpak install -y flathub it.mijorus.gearlever
+            gearlever_cmd="flatpak run it.mijorus.gearlever"
+        fi
+    fi
+    
+    # 3. Integrate AppImage using GearLever
+    echo "-> Integrating AppImage with GearLever..."
+    $gearlever_cmd --integrate "$target_appimage"
+    
+    echo "========================================="
+    echo " AppImage successfully installed & integrated!"
+    echo " Location: $target_appimage"
+    echo "========================================="
+    exit 0
+fi
+
+# ==========================================
+# Handle standard archives (.tar.gz, .zip, etc.)
+# ==========================================
 
 # Create a temporary working directory
 TEMP_DIR=$(mktemp -d)
@@ -28,61 +93,38 @@ echo "========================================="
 echo " Extracting archive..."
 echo "========================================="
 
-filename=$(basename "$ARCHIVE")
-extension="${filename##*.}"
+cd "$TEMP_DIR"
+case "$filename" in
+    *.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.bz2|*.tbz2)
+        tar -xf "$ARCHIVE"
+        ;;
+    *.zip)
+        unzip -q "$ARCHIVE"
+        ;;
+    *)
+        # Try generic tar or unzip
+        tar -xf "$ARCHIVE" 2>/dev/null || unzip -q "$ARCHIVE" 2>/dev/null || {
+            echo "Error: Unknown or unsupported archive format."
+            exit 1
+        }
+        ;;
+esac
 
-# Handle AppImage special case
-if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
-    app_slug=$(echo "$filename" | sed 's/\.[Aa]pp[Ii]mage$//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-    app_dir="$SHARE_DIR/$app_slug"
-    mkdir -p "$app_dir"
-    target_bin="$app_dir/$filename"
-    cp -f "$ARCHIVE" "$target_bin"
-    chmod +x "$target_bin"
-    
-    # Try extracting AppImage contents for icon/desktop if possible
-    cd "$TEMP_DIR"
-    "$target_bin" --appimage-extract &>/dev/null || true
-    if [ -d "$TEMP_DIR/squashfs-root" ]; then
-        extracted_root="$TEMP_DIR/squashfs-root"
-    else
-        extracted_root="$app_dir"
-    fi
+# Check top-level items in TEMP_DIR
+top_items=("$TEMP_DIR"/*)
+if [ ${#top_items[@]} -eq 1 ] && [ -d "${top_items[0]}" ]; then
+    extracted_root="${top_items[0]}"
+    app_slug=$(basename "$extracted_root" | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
 else
-    # Extract based on extension
-    cd "$TEMP_DIR"
-    case "$filename" in
-        *.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.bz2|*.tbz2)
-            tar -xf "$ARCHIVE"
-            ;;
-        *.zip)
-            unzip -q "$ARCHIVE"
-            ;;
-        *)
-            # Try generic tar or unzip
-            tar -xf "$ARCHIVE" 2>/dev/null || unzip -q "$ARCHIVE" 2>/dev/null || {
-                echo "Error: Unknown or unsupported archive format."
-                exit 1
-            }
-            ;;
-    esac
-    
-    # Check top-level items in TEMP_DIR
-    top_items=("$TEMP_DIR"/*)
-    if [ ${#top_items[@]} -eq 1 ] && [ -d "${top_items[0]}" ]; then
-        extracted_root="${top_items[0]}"
-        app_slug=$(basename "$extracted_root" | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
-    else
-        extracted_root="$TEMP_DIR"
-        app_slug=$(echo "$filename" | sed -E 's/\.(tar\.(gz|xz|bz2)|tgz|txz|tbz2|zip)$//I' | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
-    fi
-    
-    app_dir="$SHARE_DIR/$app_slug"
-    rm -rf "$app_dir"
-    mkdir -p "$app_dir"
-    cp -r "$extracted_root"/* "$app_dir/"
-    extracted_root="$app_dir"
+    extracted_root="$TEMP_DIR"
+    app_slug=$(echo "$filename" | sed -E 's/\.(tar\.(gz|xz|bz2)|tgz|txz|tbz2|zip)$//I' | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
 fi
+
+app_dir="$SHARE_DIR/$app_slug"
+rm -rf "$app_dir"
+mkdir -p "$app_dir"
+cp -r "$extracted_root"/* "$app_dir/"
+extracted_root="$app_dir"
 
 # Generate Normie display name (e.g. android-studio or AndroidStudio -> Android Studio)
 raw_name="$app_slug"
