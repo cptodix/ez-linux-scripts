@@ -5,9 +5,7 @@ set -e
 BIN_DIR="$HOME/.local/bin"
 SHARE_DIR="$HOME/.local/share"
 APP_DIR="$HOME/.local/share/applications"
-APPLICATIONS_DIR="$HOME/Applications"
-
-mkdir -p "$BIN_DIR" "$SHARE_DIR" "$APP_DIR" "$APPLICATIONS_DIR"
+mkdir -p "$BIN_DIR" "$SHARE_DIR" "$APP_DIR"
 
 if [ -z "$1" ]; then
     echo "Usage: ez-install <path-to-archive-or-appimage>"
@@ -32,13 +30,7 @@ if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
     echo " Processing AppImage: $filename"
     echo "========================================="
     
-    # 1. Copy .AppImage to ~/Applications
-    target_appimage="$APPLICATIONS_DIR/$filename"
-    echo "-> Copying AppImage to $target_appimage"
-    cp -f "$ARCHIVE" "$target_appimage"
-    chmod +x "$target_appimage"
-    
-    # 2. Check if GearLever is installed, install if missing
+    # Resolve GearLever command
     gearlever_cmd=""
     if command -v gearlever &> /dev/null; then
         gearlever_cmd="gearlever"
@@ -48,7 +40,6 @@ if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
         echo "-> GearLever not found. Installing GearLever..."
         installed_via_native=false
         
-        # Prioritize native package manager (zypper on openSUSE)
         if command -v zypper &> /dev/null; then
             echo "-> Attempting installation via zypper..."
             if sudo zypper install -y gearlever; then
@@ -57,26 +48,24 @@ if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
             fi
         fi
         
-        # Fallback to Flatpak if native package manager failed or is unavailable
         if [ "$installed_via_native" = false ]; then
             echo "-> Installing GearLever from Flathub (Flatpak)..."
             if ! command -v flatpak &> /dev/null; then
                 echo "Error: Neither zypper nor flatpak found to install GearLever."
                 exit 1
-            }
+            fi
             flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
             flatpak install -y flathub it.mijorus.gearlever
             gearlever_cmd="flatpak run it.mijorus.gearlever"
         fi
     fi
     
-    # 3. Integrate AppImage using GearLever
+    # Integrate AppImage using GearLever
     echo "-> Integrating AppImage with GearLever..."
-    $gearlever_cmd --integrate "$target_appimage"
+    $gearlever_cmd --integrate "$ARCHIVE"
     
     echo "========================================="
-    echo " AppImage successfully installed & integrated!"
-    echo " Location: $target_appimage"
+    echo " AppImage successfully integrated!"
     echo "========================================="
     exit 0
 fi
