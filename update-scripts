@@ -4,21 +4,13 @@ set -e
 # Target directories
 BIN_DIR="$HOME/.local/bin"
 APP_DIR="$HOME/.local/share/applications"
-CONFIG_DIR="$HOME/.local/etc"
-CONFIG_FILE="$CONFIG_DIR/opensuse-scripts-repo-dir"
 
-# Parse the repo dir from the stored config
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Repository directory config not found."
-    echo "Please run './install' from the repository first to register it."
-    exit 1
-fi
-
-REPO_DIR=$(cat "$CONFIG_FILE" | xargs)
+# Repository directory (set by install-scripts)
+REPO_DIR="REPO_DIR_PLACEHOLDER"
 
 if [ ! -d "$REPO_DIR" ]; then
-    echo "Error: Repository directory '$REPO_DIR' no longer exists."
-    echo "Please run './install' from the repository first to register it."
+    echo "Error: Repository directory not configured or does not exist."
+    echo "Please run './install-scripts' from the repository to set it up."
     exit 1
 fi
 
@@ -38,7 +30,7 @@ for file in "$REPO_DIR"/*; do
 
     # Skip installer itself, documentation, license, and hidden files
     case "$filename" in
-        install|README.md|LICENSE|AGENTS.md|update|.*)
+        install-scripts|README.md|LICENSE|AGENTS.md|update-scripts|*.md)
             continue
             ;;
     esac

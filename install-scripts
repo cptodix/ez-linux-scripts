@@ -38,7 +38,7 @@ if [ "$UNINSTALL" = true ]; then
         [ -d "$file" ] && continue
         filename=$(basename "$file")
         case "$filename" in
-            install|README.md|LICENSE|AGENTS.md|.*) continue ;;
+            install-scripts|README.md|LICENSE|AGENTS.md|update-scripts|*.md) continue ;;
         esac
         
         target_bin="$BIN_DIR/$filename"
@@ -85,7 +85,7 @@ for file in "$REPO_DIR"/*; do
     
     # Skip installer itself, documentation, license, and hidden files
     case "$filename" in
-        install|README.md|LICENSE|AGENTS.md|.*)
+        install-scripts|README.md|LICENSE|AGENTS.md|update-scripts|*.md)
             continue
             ;;
     esac
@@ -125,9 +125,13 @@ fi
 echo "========================================="
 echo " Installation and shortcut generation complete!"
 
-# Store repo directory for update script
-CONFIG_DIR="$HOME/.local/etc"
-mkdir -p "$CONFIG_DIR"
-echo "$REPO_DIR" > "$CONFIG_DIR/opensuse-scripts-repo-dir"
-echo " -> Registered repo directory: $REPO_DIR"
+# Install update-scripts and configure it with this repository directory
+UPDATE_SCRIPT_SRC="$REPO_DIR/update-scripts"
+UPDATE_SCRIPT_PATH="$BIN_DIR/update-scripts"
+if [ -f "$UPDATE_SCRIPT_SRC" ]; then
+    [ "$DRY_RUN" = false ] && cp -f "$UPDATE_SCRIPT_SRC" "$UPDATE_SCRIPT_PATH"
+    [ "$DRY_RUN" = false ] && chmod +x "$UPDATE_SCRIPT_PATH"
+    [ "$DRY_RUN" = false ] && sed -i "s|REPO_DIR_PLACEHOLDER|${REPO_DIR}|g" "$UPDATE_SCRIPT_PATH"
+    echo " -> Installed and configured update-scripts with repo directory: $REPO_DIR"
+fi
 echo "========================================="
