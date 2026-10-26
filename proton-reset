@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-BACKUP_DIR="$HOME/proton-backups"
-mkdir -p "$BACKUP_DIR"
-
 # Function to find all Steam library paths
 get_steam_libraries() {
     local base_paths=(
@@ -18,7 +15,7 @@ get_steam_libraries() {
             local vdf="$bp/steamapps/libraryfolders.vdf"
             if [ -f "$vdf" ]; then
                 while IFS= read -r line; do
-                    if [[ "$line" =~ \"path\"\s+\"([^\"]+)\" ]]; then
+                    if [[ "$line" =~ \"path\"[[:space:]]+\"([^\"]+)\" ]]; then
                         local p="${BASH_REMATCH[1]}"
                         p="${p//\\\\/\/}"
                         if [ -d "$p" ] && [[ ! " ${libs[*]} " =~ " ${p} " ]]; then
@@ -43,9 +40,9 @@ get_installed_games() {
                 local appid=""
                 local name=""
                 while IFS= read -r line; do
-                    if [[ "$line" =~ \"appid\"\s+\"([0-9]+)\" ]]; then
+                    if [[ "$line" =~ \"appid\"[[:space:]]+\"([0-9]+)\" ]]; then
                         appid="${BASH_REMATCH[1]}"
-                    elif [[ "$line" =~ \"name\"\s+\"([^\"]+)\" ]]; then
+                    elif [[ "$line" =~ \"name\"[[:space:]]+\"([^\"]+)\" ]]; then
                         name="${BASH_REMATCH[1]}"
                     fi
                 done < "$acf"
@@ -57,7 +54,26 @@ get_installed_games() {
     done | sort -t'|' -k2
 }
 
-# Handle restore mode
+# Get the latest backup for a given appid inside its compatdata/backup folder
+find_latest_backup() {
+    local appid="$1"
+    local compatdata_dir="$2"
+    local backup_dir="$compatdata_dir/backup"
+    
+    if [ ! -d "$backup_dir" ]; then
+        echo ""
+        return
+    fi
+    
+    local latest=""
+    for f in "$backup_dir"/${appid}_*.tar.gz; do
+        [ -f "$f" ] || continue
+        latest="$f"
+    done
+    echo "$latest"
+}
+
+# Handle restore mode (--restore <backup-file>)
 do_restore() {
     local backup_file="$1"
     if [ ! -f "$backup_file" ]; then
@@ -150,30 +166,65 @@ for choice in $choices; do
         continue
     fi
     
-    # 1. Backup user saves and configs before deletion
-    user_pfx="$compatdata_dir/pfx/drive_c/users/steamuser"
-    if [ -d "$user_pfx" ]; then
-        backup_filename="proton-backup-${appid}-${name// /_}-$(date +%Y%m%d_%H%M%S).tar.gz"
-        backup_path="$BACKUP_DIR/$backup_filename"
-        echo "Backing up user saves and configs..."
+    # 1. Backup common savegame folders into compatdata/backup/
+    backup_dir="$compatdata_dir/backup"
+    mkdir -p "$backup_dir"
+    
+    # Truncate game name to first 30 chars, replace spaces with underscores
+    truncated_name="${name:0:30}"
+    truncated_name="${truncated_name// /_}"
+    backup_filename="${appid}_$(date +%Y%m%d_%H%M%S)_${truncated_name}.tar.gz"
+    backup_path="$backup_dir/$backup_filename"
+    
+    echo "Backing up common savegame folders..."
+    
+    # Define common savegame paths inside compatdata
+    save_paths=(
+        "savegames"
+        "saves"
+        "savedata"
+        "SavedArts"
+        "Documents"
+        "AppData/Local"
+        "AppData/Roaming"
+        "pfx/drive_c/users/steamuser/Documents"
+        "pfx/drive_c/users/steamuser/Saved Games"
+        "pfx/drive_c/users/steamuser/AppData/Local"
+        "pfx/drive_c/users/steamuser/AppData/Roaming"
+        "pfx/drive_c/ProgramData"
+    )
+    
+    # Collect existing paths and their display names
+    found_paths=()
+    found_names=()
+    for sp in "${save_paths[@]}"; do
+        if [ -d "$compatdata_dir/$sp" ]; then
+            found_paths+=("$sp")
+            found_names+=("$sp")
+        fi
+    done
+    
+    if [ ${#found_paths[@]} -eq 0 ]; then
+        echo "No common savegame folders found; skipping backup."
+    else
+        # Use a temp directory to preserve the exact folder structure
+        temp_dir=$(mktemp -d)
         
-        pushd "$user_pfx" > /dev/null
-        backup_items=()
-        for sub in "Documents" "Saved Games" "AppData/Local" "AppData/Roaming"; do
-            if [ -d "$sub" ]; then
-                backup_items+=("$sub")
-            fi
+        # Copy each found path into temp_dir preserving relative structure
+        for idx in "${!found_paths[@]}"; do
+            src="${found_paths[$idx]}"
+            dest_name="${found_names[$idx]}"
+            mkdir -p "$temp_dir/$dest_name"
+            cp -a "$compatdata_dir/$src/." "$temp_dir/$dest_name/" 2>/dev/null || true
         done
         
-        if [ ${#backup_items[@]} -gt 0 ]; then
-            tar -czf "$backup_path" "${backup_items[@]}" 2>/dev/null || true
-            echo "Backup saved to: $backup_path"
-        else
-            echo "No standard save/config folders found to backup."
-        fi
+        pushd "$temp_dir" > /dev/null
+        tar -czf "$backup_path" . 2>/dev/null
         popd > /dev/null
-    else
-        echo "No wine steamuser profile found inside compatdata; skipping backup."
+        
+        rm -rf "$temp_dir"
+        
+        echo "Backup saved to: $backup_path"
     fi
     
     # 2. Confirmation before deletion
@@ -184,6 +235,18 @@ for choice in $choices; do
         echo "Successfully reset compatdata for $name."
     else
         echo "Skipped deletion for $name."
+        continue
+    fi
+    
+    # 3. Offer immediate restore from the backup just created
+    echo ""
+    read -p "Would you like to restore the backup immediately? [y/N]: " restore_now
+    if [[ "$restore_now" =~ ^[Yy]$ ]]; then
+        # Recreate compatdata dir (was deleted above)
+        mkdir -p "$compatdata_dir"
+        echo "Restoring backup into: $compatdata_dir"
+        tar -xzf "$backup_path" -C "$compatdata_dir"
+        echo "Restore completed successfully for $name!"
     fi
 done
 
