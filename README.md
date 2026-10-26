@@ -2,43 +2,63 @@
 
 A collection of personal utility and automation scripts for openSUSE and Linux environments, optimized for quick terminal use.
 
+## Repository Structure
+
+```
+opensuse_scripts/
+├── install-scripts          # Entry point — scans scripts/*/
+├── update-scripts           # Mirror of scripts/*/ — scans recursively
+├── README.md
+├── AGENTS.md
+├── LICENSE
+└── scripts/                 # All scripts live in per-script subdirectories
+    ├── agy-switch/          #   └── agy-switch
+    ├── ez-install/          #   └── ez-install
+    ├── guest-visibility/    #   └── guest-visibility
+    ├── install-win-fonts/   #   └── install-win-fonts
+    ├── proton-reset/        #   └── proton-reset
+    ├── update-all/          #   └── update-all
+    └── warp-toggle/         #   └── warp-toggle
+```
+
+Each script has its own subdirectory for future extensibility (icons, docs, patches, configs).
+
+## Quick Start
+
+```bash
+# Install all scripts to ~/.local/bin
+./install-scripts
+
+# Update all installed scripts from the repository
+update-scripts
+
+# Uninstall all scripts
+./install-scripts --uninstall
+```
+
 ## Scripts Overview
 
 | Script Name | Description |
 | ----------- | ----------- |
 | [`install-scripts`](install-scripts) | Dynamic installer script that copies all current and future scripts to `~/.local/bin`, makes them executable, and overwrites existing ones. Registers the repo directory for the `update-scripts` script. |
 | [`update-scripts`](update-scripts) | Updates all installed scripts from the original repository directory (registered by `install-scripts`). Skips scripts that are already up-to-date. |
-| [`ez-install`](ez-install) | Universal archive installer (`.tar.gz`, `.zip`, `.AppImage`, etc.) that extracts to `~/.local/share`, links binaries to `~/.local/bin`, finds icons, and interactive category selection for `.desktop` shortcuts. |
-| [`proton-reset`](proton-reset) | Steam Proton troubleshooting utility that scans all storage libraries, lists installed games, backs up savefiles/configs, deletes `compatdata` to reset Proton, and supports backup restoration (`--restore`). |
-| [`update-all`](update-all) | Refreshes Zypper repositories, performs distribution upgrade (`dup`), updates system-wide Flatpaks, and cleans up unused runtimes. |
-| [`install-win-fonts`](install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites to user local fonts directory. |
-| [`warp-toggle`](warp-toggle) | Toggles Cloudflare WARP connection status on/off with desktop notifications (`notify-send`). |
-| [`guest-visibility`](guest-visibility) | Manages SDDM login manager guest account visibility (hide/show/toggle) on openSUSE (requires `sudo`). |
-| [`agy-switch`](agy-switch) | Utility script for managing Gemini API keys and settings modes for `antigravity-cli`. |
+| [`ez-install`](scripts/ez-install) | Universal archive installer (`.tar.gz`, `.zip`, `.AppImage`, etc.) that extracts to `~/.local/share`, links binaries to `~/.local/bin`, finds icons, and interactive category selection for `.desktop` shortcuts. |
+| [`proton-reset`](scripts/proton-reset) | Steam Proton troubleshooting utility that scans all storage libraries, lists installed games, backs up common savegame folders, deletes `compatdata` to reset Proton, and supports backup restore (`--restore`). |
+| [`update-all`](scripts/update-all) | Terminal-agnostic system updater (Zypper ref/dup + Flatpak update/cleanup) with an explicit exit prompt. |
+| [`install-win-fonts`](scripts/install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites (`ms-fonts`). |
+| [`warp-toggle`](scripts/warp-toggle) | Toggles Cloudflare WARP connection status with desktop notifications (`notify-send`). |
+| [`guest-visibility`](scripts/guest-visibility) | Manages SDDM login manager guest account visibility (`hide`, `unhide`, `toggle`, `status`). Automatically creates the `guest` user if missing when unhiding. |
+| [`agy-switch`](scripts/agy-switch) | Utility for switching `antigravity-cli` between Gemini API Key mode and Google OAuth mode. |
 
-## Installation
+## Adding a New Script
 
-To install or update all scripts to `~/.local/bin` automatically:
+1. Create a new directory under `scripts/` using kebab-case naming: `scripts/my-new-script/`
+2. Place the main script file inside with the same name: `scripts/my-new-script/my-new-script`
+3. Add a shebang line: `#!/usr/bin/env bash`
+4. Run `./install-scripts` to deploy it
 
-```bash
-./install-scripts
-```
+The installer will automatically pick up any new script in `scripts/` — no configuration changes needed.
 
-## Usage
+## License
 
-Make sure `~/.local/bin` is in your `$PATH`.
-
-```bash
-# Update all scripts from the repository
-update-scripts
-
-# Example usage
-proton-reset                    # Reset game compatdata & auto-backup saves
-proton-reset --restore <backup> # Restore saves into a game compatdata folder
-ez-install /path/to/app.tar.gz
-update-all
-install-win-fonts
-warp-toggle
-sudo guest-visibility guest toggle
-agy-switch api YOUR_API_KEY
-```
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

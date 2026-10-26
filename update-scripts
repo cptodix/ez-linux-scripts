@@ -23,35 +23,32 @@ echo "========================================="
 updated=0
 skipped=0
 
-for file in "$REPO_DIR"/*; do
-    [ -d "$file" ] && continue
-
-    filename=$(basename "$file")
-
-    # Skip installer itself, documentation, license, and hidden files
-    case "$filename" in
-        install-scripts|README.md|LICENSE|AGENTS.md|update-scripts|*.md)
-            continue
-            ;;
-    esac
-
-    target_path="$BIN_DIR/$filename"
-    desktop_file="$APP_DIR/${filename}.desktop"
-
+for script_dir in "$REPO_DIR"/scripts/*/; do
+    [ -d "$script_dir" ] || continue
+    
+    script_name=$(basename "$script_dir")
+    script_file="$script_dir/$script_name"
+    
+    # Skip if no main script file exists
+    [ -f "$script_file" ] || continue
+    
+    target_path="$BIN_DIR/$script_name"
+    desktop_file="$APP_DIR/${script_name}.desktop"
+    
     # Check if there's an actual change
-    if [ -f "$target_path" ] && cmp -s "$file" "$target_path"; then
+    if [ -f "$target_path" ] && cmp -s "$script_file" "$target_path"; then
         skipped=$((skipped + 1))
         continue
     fi
-
-    echo " -> Updating script: $filename -> $target_path"
-    cp -f "$file" "$target_path"
+    
+    echo " -> Updating script: $script_name -> $target_path"
+    cp -f "$script_file" "$target_path"
     chmod +x "$target_path"
     updated=$((updated + 1))
-
+    
     # Regenerate .desktop shortcut
-    pretty_name=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
-
+    pretty_name=$(echo "$script_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
+    
     echo " -> Refreshing desktop shortcut: $desktop_file"
     cat << EOF > "$desktop_file"
 [Desktop Entry]

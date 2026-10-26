@@ -34,15 +34,16 @@ if [ "$UNINSTALL" = true ]; then
     echo " Uninstalling scripts and shortcuts..."
     echo "========================================="
     
-    for file in "$REPO_DIR"/*; do
-        [ -d "$file" ] && continue
-        filename=$(basename "$file")
-        case "$filename" in
-            install-scripts|README.md|LICENSE|AGENTS.md|update-scripts|*.md) continue ;;
-        esac
+    for script_dir in "$REPO_DIR"/scripts/*/; do
+        [ -d "$script_dir" ] || continue
         
-        target_bin="$BIN_DIR/$filename"
-        target_desktop="$APP_DIR/${filename}.desktop"
+        script_name=$(basename "$script_dir")
+        script_file="$script_dir/$script_name"
+        
+        [ -f "$script_file" ] || continue
+        
+        target_bin="$BIN_DIR/$script_name"
+        target_desktop="$APP_DIR/${script_name}.desktop"
         
         if [ -f "$target_bin" ]; then
             echo " -> Removing binary: $target_bin"
@@ -76,31 +77,27 @@ echo "========================================="
 [ "$DRY_RUN" = false ] && mkdir -p "$BIN_DIR"
 [ "$DRY_RUN" = false ] && mkdir -p "$APP_DIR"
 
-# Dynamically iterate over all files in the repository root
-for file in "$REPO_DIR"/*; do
-    # Skip if it's a directory
-    [ -d "$file" ] && continue
+# Dynamically iterate over all script directories in scripts/
+for script_dir in "$REPO_DIR"/scripts/*/; do
+    [ -d "$script_dir" ] || continue
     
-    filename=$(basename "$file")
+    script_name=$(basename "$script_dir")
+    script_file="$script_dir/$script_name"
     
-    # Skip installer itself, documentation, license, and hidden files
-    case "$filename" in
-        install-scripts|README.md|LICENSE|AGENTS.md|update-scripts|*.md)
-            continue
-            ;;
-    esac
+    # Skip if no main script file exists
+    [ -f "$script_file" ] || continue
     
-    target_path="$BIN_DIR/$filename"
+    target_path="$BIN_DIR/$script_name"
     
-    echo " -> Installing script: $filename -> $target_path"
+    echo " -> Installing script: $script_name -> $target_path"
     if [ "$DRY_RUN" = false ]; then
-        cp -f "$file" "$target_path"
+        cp -f "$script_file" "$target_path"
         chmod +x "$target_path"
     fi
     
     # Generate .desktop shortcut
-    desktop_file="$APP_DIR/${filename}.desktop"
-    pretty_name=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
+    desktop_file="$APP_DIR/${script_name}.desktop"
+    pretty_name=$(echo "$script_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
     
     echo " -> Creating desktop shortcut: $desktop_file"
     if [ "$DRY_RUN" = false ]; then
