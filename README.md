@@ -6,7 +6,8 @@ A collection of personal utility and automation scripts for openSUSE and Linux e
 
 | Script Name | Description |
 | ----------- | ----------- |
-| [`install`](install) | Dynamic installer script that copies all current and future scripts to `~/.local/bin`, makes them executable, and overwrites existing ones. |
+| [`install`](install) | Dynamic installer script that copies all current and future scripts to `~/.local/bin`, makes them executable, and overwrites existing ones. Registers the repo directory for the `update` script. |
+| [`update`](update) | Updates all installed scripts from the original repository directory (registered by `install`). Skips scripts that are already up-to-date. |
 | [`ez-install`](ez-install) | Universal archive installer (`.tar.gz`, `.zip`, `.AppImage`, etc.) that extracts to `~/.local/share`, links binaries to `~/.local/bin`, finds icons, and interactive category selection for `.desktop` shortcuts. |
 | [`proton-reset`](proton-reset) | Steam Proton troubleshooting utility that scans all storage libraries, lists installed games, backs up savefiles/configs, deletes `compatdata` to reset Proton, and supports backup restoration (`--restore`). |
 | [`update-all`](update-all) | Refreshes Zypper repositories, performs distribution upgrade (`dup`), updates system-wide Flatpaks, and cleans up unused runtimes. |
@@ -28,6 +29,9 @@ To install or update all scripts to `~/.local/bin` automatically:
 Make sure `~/.local/bin` is in your `$PATH`.
 
 ```bash
+# Update all scripts from the repository
+update
+
 # Example usage
 proton-reset                    # Reset game compatdata & auto-backup saves
 proton-reset --restore <backup> # Restore saves into a game compatdata folder

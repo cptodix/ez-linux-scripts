@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -e
+
+# Target directories
+BIN_DIR="$HOME/.local/bin"
+APP_DIR="$HOME/.local/share/applications"
+CONFIG_DIR="$HOME/.local/etc"
+CONFIG_FILE="$CONFIG_DIR/opensuse-scripts-repo-dir"
+
+# Parse the repo dir from the stored config
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Repository directory config not found."
+    echo "Please run './install' from the repository first to register it."
+    exit 1
+fi
+
+REPO_DIR=$(cat "$CONFIG_FILE" | xargs)
+
+if [ ! -d "$REPO_DIR" ]; then
+    echo "Error: Repository directory '$REPO_DIR' no longer exists."
+    echo "Please run './install' from the repository first to register it."
+    exit 1
+fi
+
+mkdir -p "$BIN_DIR" "$APP_DIR"
+
+echo "========================================="
+echo " Updating scripts from: $REPO_DIR"
+echo "========================================="
+
+updated=0
+skipped=0
+
+for file in "$REPO_DIR"/*; do
+    [ -d "$file" ] && continue
+
+    filename=$(basename "$file")
+
+    # Skip installer itself, documentation, license, and hidden files
+    case "$filename" in
+        install|README.md|LICENSE|AGENTS.md|update|.*)
+            continue
+            ;;
+    esac
+
+    target_path="$BIN_DIR/$filename"
+    desktop_file="$APP_DIR/${filename}.desktop"
+
+    # Check if there's an actual change
+    if [ -f "$target_path" ] && cmp -s "$file" "$target_path"; then
+        skipped=$((skipped + 1))
+        continue
+    fi
+
+    echo " -> Updating script: $filename -> $target_path"
+    cp -f "$file" "$target_path"
+    chmod +x "$target_path"
+    updated=$((updated + 1))
+
+    # Regenerate .desktop shortcut
+    pretty_name=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
+
+    echo " -> Refreshing desktop shortcut: $desktop_file"
+    cat << EOF > "$desktop_file"
+[Desktop Entry]
+Type=Application
+Name=$pretty_name
+Exec=$target_path
+Terminal=true
+Categories=Utility;Application;
+Comment=Script: $pretty_name
+EOF
+    chmod +x "$desktop_file"
+done
+
+# Update desktop database if available
+if command -v update-desktop-database &> /dev/null; then
+    update-desktop-database "$APP_DIR" 2>/dev/null || true
+fi
+
+echo "========================================="
+echo " Update complete!"
+echo " Updated: $updated"
+echo " Skipped (up-to-date): $skipped"
+echo "========================================="

@@ -124,4 +124,10 @@ fi
 
 echo "========================================="
 echo " Installation and shortcut generation complete!"
+
+# Store repo directory for update script
+CONFIG_DIR="$HOME/.local/etc"
+mkdir -p "$CONFIG_DIR"
+echo "$REPO_DIR" > "$CONFIG_DIR/opensuse-scripts-repo-dir"
+echo " -> Registered repo directory: $REPO_DIR"
 echo "========================================="
