@@ -6,22 +6,22 @@ A collection of personal utility and automation scripts for openSUSE and Linux e
 
 ```
 opensuse_scripts/
-├── install-scripts          # Entry point — scans scripts/*/
-├── update-scripts           # Mirror of scripts/*/ — scans recursively
+├── install-scripts          # Entry point — scans scripts/*
+├── update-scripts           # Mirror of scripts/* — scans recursively
 ├── README.md
 ├── AGENTS.md
 ├── LICENSE
-└── scripts/                 # All scripts live in per-script subdirectories
-    ├── agy-switch/          #   └── agy-switch
-    ├── ez-install/          #   └── ez-install
-    ├── guest-visibility/    #   └── guest-visibility
-    ├── goto/                #   └── goto
-    ├── install-win-fonts/   #   └── install-win-fonts
-    ├── proton-reset/        #   └── proton-reset
-    ├── update-all/          #   └── update-all
+└── scripts/                 # All script files live directly in scripts/
+    ├── agy-switch
+    ├── ez-install
+    ├── guest-visibility
+    ├── goto
+    ├── install-win-fonts
+    ├── proton-reset
+    └── update-all
 ```
 
-Each script has its own subdirectory for future extensibility (icons, docs, patches, configs).
+Each script is a single flat file for simplicity.
 
 ## Quick Start
 
@@ -52,10 +52,9 @@ update-scripts
 
 ## Adding a New Script
 
-1. Create a new directory under `scripts/` using kebab-case naming: `scripts/my-new-script/`
-2. Place the main script file inside with the same name: `scripts/my-new-script/my-new-script`
-3. Add a shebang line: `#!/usr/bin/env bash`
-4. Run `./install-scripts` to deploy it
+1. Create a new file under `scripts/` using kebab-case naming: `scripts/my-new-script`
+2. Add a shebang line: `#!/usr/bin/env bash`
+3. Run `./install-scripts` to deploy it
 
 The installer will automatically pick up any new script in `scripts/` — no configuration changes needed.
 

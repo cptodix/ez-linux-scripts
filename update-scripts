@@ -23,14 +23,10 @@ echo "========================================="
 updated=0
 skipped=0
 
-for script_dir in "$REPO_DIR"/scripts/*/; do
-    [ -d "$script_dir" ] || continue
-    
-    script_name=$(basename "$script_dir")
-    script_file="$script_dir/$script_name"
-    
-    # Skip if no main script file exists
+for script_file in "$REPO_DIR"/scripts/*; do
     [ -f "$script_file" ] || continue
+    
+    script_name=$(basename "$script_file")
     
     # Skip one-time scripts — not installed to PATH
     [ "$script_name" = "install-win-fonts" ] && continue

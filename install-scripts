@@ -34,13 +34,10 @@ if [ "$UNINSTALL" = true ]; then
     echo " Uninstalling scripts and shortcuts..."
     echo "========================================="
     
-    for script_dir in "$REPO_DIR"/scripts/*/; do
-        [ -d "$script_dir" ] || continue
-        
-        script_name=$(basename "$script_dir")
-        script_file="$script_dir/$script_name"
-        
+    for script_file in "$REPO_DIR"/scripts/*; do
         [ -f "$script_file" ] || continue
+        
+        script_name=$(basename "$script_file")
         
         target_bin="$BIN_DIR/$script_name"
         target_desktop="$APP_DIR/${script_name}.desktop"
@@ -77,15 +74,11 @@ echo "========================================="
 [ "$DRY_RUN" = false ] && mkdir -p "$BIN_DIR"
 [ "$DRY_RUN" = false ] && mkdir -p "$APP_DIR"
 
-# Dynamically iterate over all script directories in scripts/
-for script_dir in "$REPO_DIR"/scripts/*/; do
-    [ -d "$script_dir" ] || continue
-    
-    script_name=$(basename "$script_dir")
-    script_file="$script_dir/$script_name"
-    
-    # Skip if no main script file exists
+# Dynamically iterate over all script files in scripts/
+for script_file in "$REPO_DIR"/scripts/*; do
     [ -f "$script_file" ] || continue
+    
+    script_name=$(basename "$script_file")
     
     # Skip one-time scripts — run manually after install instead of installing to PATH
     [ "$script_name" = "install-win-fonts" ] && continue
@@ -126,13 +119,10 @@ echo "========================================="
 echo " Installation and shortcut generation complete!"
 
 # Execute one-time scripts
-for script_dir in "$REPO_DIR"/scripts/*/; do
-    [ -d "$script_dir" ] || continue
-    
-    script_name=$(basename "$script_dir")
-    script_file="$script_dir/$script_name"
-    
+for script_file in "$REPO_DIR"/scripts/*; do
     [ -f "$script_file" ] || continue
+    
+    script_name=$(basename "$script_file")
     
     # Execute install-win-fonts after installation
     if [ "$script_name" = "install-win-fonts" ]; then
