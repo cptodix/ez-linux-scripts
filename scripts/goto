@@ -3,87 +3,35 @@ set -e
 
 # Configuration
 MAX_BOOKMARKS=20
-# Bookmarks are stored as comments below between # BOOKMARK_START and # BOOKMARK_END markers
-# Each bookmark line format: # B:<absolute path>
+BOOKMARK_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/goto/bookmarks"
 
-SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+# Ensure config directory exists
+mkdir -p "$(dirname "$BOOKMARK_FILE")"
 
-# Read the entire script into a variable to avoid stdin conflicts
-SCRIPT_CONTENT="$(cat "$SCRIPT_PATH")"
+# Determine if script is sourced (important for parent shell cd execution)
+is_sourced=false
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    is_sourced=true
+fi
 
 # --- Helper Functions ---
 
 load_bookmarks() {
     bookmarks=()
-    local in_bookmarks=false
-    while IFS= read -r line; do
-        if [[ "$line" == "# BOOKMARK_START" ]]; then
-            in_bookmarks=true
-            continue
-        fi
-        if [[ "$line" == "# BOOKMARK_END" ]]; then
-            in_bookmarks=false
-            continue
-        fi
-        if [ "$in_bookmarks" = true ] && [[ "$line" =~ ^#\ B: ]]; then
-            local path="${line#\# B:}"
-            bookmarks+=("$path")
-        fi
-    done <<< "$SCRIPT_CONTENT"
+    if [[ -f "$BOOKMARK_FILE" ]]; then
+        # Read file into array, ignoring empty lines
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && bookmarks+=("$line")
+        done < "$BOOKMARK_FILE"
+    fi
 }
 
 save_bookmarks() {
-    local tmp_file
-    tmp_file=$(mktemp)
-    local in_bookmarks=false
-    local bookmark_lines=()
-    
-    # Collect existing bookmark lines from SCRIPT_CONTENT
-    while IFS= read -r line; do
-        if [[ "$line" == "# BOOKMARK_START" ]]; then
-            in_bookmarks=true
-            continue
-        fi
-        if [[ "$line" == "# BOOKMARK_END" ]]; then
-            in_bookmarks=false
-            continue
-        fi
-        if [ "$in_bookmarks" = true ] && [[ "$line" =~ ^#\ B: ]]; then
-            bookmark_lines+=("$line")
-        fi
-    done <<< "$SCRIPT_CONTENT"
-    
-    # Write everything except old bookmark block, then insert new ones
-    in_bookmarks=false
-    while IFS= read -r line; do
-        if [[ "$line" == "# BOOKMARK_START" ]]; then
-            in_bookmarks=true
-            continue
-        fi
-        if [[ "$line" == "# BOOKMARK_END" ]]; then
-            in_bookmarks=false
-            echo "# BOOKMARK_END" >> "$tmp_file"
-            continue
-        fi
-        if [ "$in_bookmarks" = true ]; then
-            continue
-        fi
-        echo "$line" >> "$tmp_file"
-    done <<< "$SCRIPT_CONTENT"
-    
-    # Insert new bookmarks
-    echo "# BOOKMARK_START" >> "$tmp_file"
-    for i in "${!bookmarks[@]}"; do
-        echo "# B:${bookmarks[$i]}" >> "$tmp_file"
+    # Clear file and write array elements line by line
+    > "$BOOKMARK_FILE"
+    for dir in "${bookmarks[@]}"; do
+        echo "$dir" >> "$BOOKMARK_FILE"
     done
-    echo "# BOOKMARK_END" >> "$tmp_file"
-    
-    # Preserve permissions and overwrite
-    chmod +x "$tmp_file"
-    mv "$tmp_file" "$SCRIPT_PATH"
-    
-    # Update SCRIPT_CONTENT to reflect the new file
-    SCRIPT_CONTENT="$(cat "$SCRIPT_PATH")"
 }
 
 display_menu() {
@@ -231,36 +179,74 @@ delete_bookmark() {
     echo "Deleted $deleted bookmark(s)."
 }
 
+execute_cd() {
+    local target_dir="$1"
+    if [ -d "$target_dir" ]; then
+        cd "$target_dir" && ls
+        if [ "$is_sourced" = true ]; then
+            return 0
+        else
+            # Replaces the current child process with a new shell session inside the target directory
+            exec "$SHELL"
+        fi
+    else
+        echo "Error: Directory does not exist: $target_dir"
+        if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
+    fi
+}
+
+# --- Handle Command Line Arguments (Point 8) ---
+if [ $# -gt 0 ]; then
+    load_bookmarks
+    arg="$1"
+    if [[ "$arg" =~ ^[0-9]+$ ]]; then
+        num=$((10#$arg))
+        if [ -n "${bookmarks[$((num - 1))]+x}" ]; then
+            execute_cd "${bookmarks[$((num - 1))]}"
+            if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
+        else
+            echo "Error: Bookmark $num not found."
+            if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
+        fi
+    elif [[ "$arg" =~ ^[a-tA-T]$ ]]; then
+        lower=$(echo "$arg" | tr '[:upper:]' '[:lower:]')
+        index=$(( $(printf '%d' "'$lower") - 96 ))
+        if [ -n "${bookmarks[$((index - 1))]+x}" ]; then
+            execute_cd "${bookmarks[$((index - 1))]}"
+            if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
+        else
+            echo "Error: Bookmark $arg not found."
+            if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
+        fi
+    else
+        echo "Invalid argument. Use a bookmark number (1-$MAX_BOOKMARKS) or letter."
+        if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
+    fi
+fi
+
 # --- Main Loop ---
 while true; do
     display_menu
-    read -r -n 1 choice
+    read -r -p "Select option: " choice
     echo ""
-    # Drain remaining input (newline left by -n 1)
-    read -r -t 0.1 _drain 2>/dev/null || true
     
     case "$choice" in
-        [Qq])
+        [Qq]*)
             echo "Exiting."
-            exit 0
+            if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
             ;;
-        [Aa])
+        [Aa]*)
             add_bookmark
             ;;
-        [Dd])
+        [Dd]*)
             delete_bookmark
             ;;
-        [0-9])
-            num="$choice"
+        [0-9]|[1-9][0-9])
+            num=$((10#$choice))
             load_bookmarks
             if [ -n "${bookmarks[$((num - 1))]+x}" ]; then
-                dir="${bookmarks[$((num - 1))]}"
-                if [ -d "$dir" ]; then
-                    cd "$dir" && ls
-                    exit 0
-                else
-                    echo "Error: Directory does not exist: $dir"
-                fi
+                execute_cd "${bookmarks[$((num - 1))]}"
+                if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
             else
                 echo "Error: Bookmark $num not found."
             fi
@@ -270,13 +256,8 @@ while true; do
             index=$(( $(printf '%d' "'$lower") - 96 ))
             load_bookmarks
             if [ -n "${bookmarks[$((index - 1))]+x}" ]; then
-                dir="${bookmarks[$((index - 1))]}"
-                if [ -d "$dir" ]; then
-                    cd "$dir" && ls
-                    exit 0
-                else
-                    echo "Error: Directory does not exist: $dir"
-                fi
+                execute_cd "${bookmarks[$((index - 1))]}"
+                if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
             else
                 echo "Error: Bookmark $choice not found."
             fi
@@ -288,6 +269,3 @@ while true; do
     echo ""
     read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
 done
-
-# BOOKMARK_START
-# BOOKMARK_END

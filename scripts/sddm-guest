@@ -126,10 +126,10 @@ case "$ACTION" in
     *)
         echo "Usage: sudo $0 [username] [hide|unhide|toggle|status]"
         echo "Examples:"
-        echo "  sudo guest-visibility          # Toggle default 'guest' account visibility"
-        echo "  sudo guest-visibility status   # Check guest account & visibility status"
-        echo "  sudo guest-visibility hide     # Hide guest account"
-        echo "  sudo guest-visibility unhide   # Make guest account visible (creates user if missing)"
+        echo "  sudo sddm-guest                # Toggle default 'guest' account visibility"
+        echo "  sudo sddm-guest status         # Check guest account & visibility status"
+        echo "  sudo sddm-guest hide           # Hide guest account"
+        echo "  sudo sddm-guest unhide         # Make guest account visible (creates user if missing)"
         exit 1
         ;;
 esac

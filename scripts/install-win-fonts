@@ -14,7 +14,7 @@ mkdir -p "$FONT_DIR"
 mkdir -p "$TEMP_DIR"
 
 echo "========================================="
-echo " Downloading Complete Windows & 365 Suites"
+echo " Downloading Complete Windows & 365 Fonts"
 echo "========================================="
 
 # 1. Classic & System Fonts (Times New Roman, Wingdings, Webdings, Arial, Calibri, etc.)
