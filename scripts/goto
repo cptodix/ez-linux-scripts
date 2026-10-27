@@ -49,11 +49,10 @@ display_menu() {
             num=$((i + 1))
             letter=$(printf '\\%03o' $((num + 96)) | tr -d '\\')
             dir="${bookmarks[$i]}"
-            dir_name=$(basename "$dir")
             if [ "$dir" = "$(pwd)" ]; then
-                echo "  $num) [$letter] $dir_name * (current)"
+                echo "  $num) [$letter] $dir * (current)"
             else
-                echo "  $num) [$letter] $dir_name"
+                echo "  $num) [$letter] $dir"
             fi
         done
     fi
@@ -119,8 +118,7 @@ delete_bookmark() {
     echo "Select bookmark(s) to delete (comma-separated numbers, 'a' for all, or press Enter to cancel):"
     for i in "${!bookmarks[@]}"; do
         num=$((i + 1))
-        dir_name=$(basename "${bookmarks[$i]}")
-        echo "  $num) $dir_name"
+        echo "  $num) ${bookmarks[$i]}"
     done
     echo ""
     read -r input
@@ -146,8 +144,7 @@ delete_bookmark() {
         sel=$(echo "$sel" | xargs)
         if [[ "$sel" =~ ^[0-9]+$ ]]; then
             if [ "$sel" -ge 1 ] && [ "$sel" -le ${#bookmarks[@]} ]; then
-                dir_name=$(basename "${bookmarks[$((sel - 1))]}")
-                echo "  Deleting: $dir_name"
+                echo "  Deleting: ${bookmarks[$((sel - 1))]}"
                 deleted=$((deleted + 1))
             else
                 echo "  Invalid: $sel"
