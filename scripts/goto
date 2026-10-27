@@ -71,6 +71,7 @@ add_bookmark() {
     
     if [ -z "$dir" ]; then
         echo "Cancelled."
+        read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
         return
     fi
     
@@ -83,6 +84,7 @@ add_bookmark() {
     fi
     dir="$(cd "$dir" 2>/dev/null && pwd)" || {
         echo "Error: Directory does not exist: $dir"
+        read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
         return
     }
     
@@ -90,6 +92,7 @@ add_bookmark() {
     for existing in "${bookmarks[@]}"; do
         if [ "$existing" = "$dir" ]; then
             echo "Bookmark already exists: $dir"
+            read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
             return
         fi
     done
@@ -97,6 +100,7 @@ add_bookmark() {
     # Check limit
     if [ ${#bookmarks[@]} -ge $MAX_BOOKMARKS ]; then
         echo "Error: Bookmark limit reached ($MAX_BOOKMARKS). Delete some first."
+        read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
         return
     fi
     
@@ -111,6 +115,7 @@ delete_bookmark() {
     
     if [ ${#bookmarks[@]} -eq 0 ]; then
         echo "No bookmarks to delete."
+        read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
         return
     fi
     
@@ -125,6 +130,7 @@ delete_bookmark() {
     
     if [ -z "$input" ]; then
         echo "Cancelled."
+        read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
         return
     fi
     
@@ -133,6 +139,7 @@ delete_bookmark() {
         bookmarks=()
         save_bookmarks
         echo "All bookmarks deleted."
+        read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
         return
     fi
     
