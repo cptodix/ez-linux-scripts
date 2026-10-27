@@ -141,7 +141,7 @@ fi
 if [ "$DRY_RUN" = false ]; then
     BASHRC="$HOME/.bashrc"
     GOTO_BIN="$BIN_DIR/goto"
-    if [ -f "$BASHRC" ] && grep -qF 'alias goto=' "$BASHRC"; then
+    if [ -f "$BASHRC" ] && grep -qxF 'alias goto=". goto"' "$BASHRC"; then
         echo " -> goto alias already present in $BASHRC"
     else
         echo "" >> "$BASHRC"
