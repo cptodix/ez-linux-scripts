@@ -146,7 +146,7 @@ if [ "$DRY_RUN" = false ]; then
     else
         echo "" >> "$BASHRC"
         echo "# Goto directory bookmark manager alias" >> "$BASHRC"
-        echo "alias goto='. $GOTO_BIN'" >> "$BASHRC"
+        echo "alias goto='. goto'" >> "$BASHRC"
         echo " -> Added goto alias to $BASHRC"
     fi
 else
