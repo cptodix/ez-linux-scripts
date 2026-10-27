@@ -47,12 +47,11 @@ display_menu() {
     else
         for i in "${!bookmarks[@]}"; do
             num=$((i + 1))
-            letter=$(printf '\\%03o' $((num + 96)) | tr -d '\\')
             dir="${bookmarks[$i]}"
             if [ "$dir" = "$(pwd)" ]; then
-                echo "  $num) [$letter] $dir * (current)"
+                echo "  $num) $dir * (current)"
             else
-                echo "  $num) [$letter] $dir"
+                echo "  $num) $dir"
             fi
         done
     fi
@@ -205,18 +204,8 @@ if [ $# -gt 0 ]; then
             echo "Error: Bookmark $num not found."
             if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
         fi
-    elif [[ "$arg" =~ ^[a-tA-T]$ ]]; then
-        lower=$(echo "$arg" | tr '[:upper:]' '[:lower:]')
-        index=$(( $(printf '%d' "'$lower") - 96 ))
-        if [ -n "${bookmarks[$((index - 1))]+x}" ]; then
-            execute_cd "${bookmarks[$((index - 1))]}"
-            if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
-        else
-            echo "Error: Bookmark $arg not found."
-            if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
-        fi
     else
-        echo "Invalid argument. Use a bookmark number (1-$MAX_BOOKMARKS) or letter."
+        echo "Error: Bookmark $num not found."
         if [ "$is_sourced" = true ]; then return 1; else exit 1; fi
     fi
 fi
@@ -246,17 +235,6 @@ while true; do
                 if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
             else
                 echo "Error: Bookmark $num not found."
-            fi
-            ;;
-        [a-tA-T])
-            lower=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
-            index=$(( $(printf '%d' "'$lower") - 96 ))
-            load_bookmarks
-            if [ -n "${bookmarks[$((index - 1))]+x}" ]; then
-                execute_cd "${bookmarks[$((index - 1))]}"
-                if [ "$is_sourced" = true ]; then return 0; else exit 0; fi
-            else
-                echo "Error: Bookmark $choice not found."
             fi
             ;;
         *)
