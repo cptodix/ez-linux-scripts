@@ -2,61 +2,93 @@
 set -e
 
 # Configuration
-BOOKMARKS_FILE="$HOME/.local/share/bookmarks/bookmarks.list"
 MAX_BOOKMARKS=20
+# Bookmarks are stored as comments below between # BOOKMARK_START and # BOOKMARK_END markers
+# Each bookmark line format: # B:<absolute path>
 
-# Ensure bookmarks directory and file exist
-mkdir -p "$(dirname "$BOOKMARKS_FILE")"
-touch "$BOOKMARKS_FILE"
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
-# Parse command-line arguments (number or character to jump directly)
-if [ $# -gt 0 ]; then
-    target="$1"
-    # Check if it's a number (1-9, 10-20)
-    if [[ "$target" =~ ^[0-9]+$ ]]; then
-        if [ "$target" -ge 1 ] && [ "$target" -le "$MAX_BOOKMARKS" ]; then
-            line=$(sed -n "${target}p" "$BOOKMARKS_FILE")
-            if [ -n "$line" ] && [ -d "$line" ]; then
-                cd "$line" && ls && exit 0
-            fi
-            echo "Error: Bookmark $target not found or directory does not exist."
-            exit 1
-        fi
-    fi
-    # Check if it's a single character (a-t)
-    if [[ "$target" =~ ^[a-tA-T]$ ]]; then
-        lower=$(echo "$target" | tr '[:upper:]' '[:lower:]')
-        index=$(( $(printf '%d' "'$lower") - 96 ))
-        line=$(sed -n "${index}p" "$BOOKMARKS_FILE")
-        if [ -n "$line" ] && [ -d "$line" ]; then
-            cd "$line" && ls && exit 0
-        fi
-        echo "Error: Bookmark $target not found or directory does not exist."
-        exit 1
-    fi
-    echo "Usage: $0 [number|letter]"
-    echo "  Number: 1-20"
-    echo "  Letter: a-t (maps to 1-20)"
-    exit 1
-fi
+# Read the entire script into a variable to avoid stdin conflicts
+SCRIPT_CONTENT="$(cat "$SCRIPT_PATH")"
 
 # --- Helper Functions ---
 
 load_bookmarks() {
-    # Read non-empty lines into array
     bookmarks=()
+    local in_bookmarks=false
     while IFS= read -r line; do
-        [ -n "$line" ] && bookmarks+=("$line")
-    done < "$BOOKMARKS_FILE"
+        if [[ "$line" == "# BOOKMARK_START" ]]; then
+            in_bookmarks=true
+            continue
+        fi
+        if [[ "$line" == "# BOOKMARK_END" ]]; then
+            in_bookmarks=false
+            continue
+        fi
+        if [ "$in_bookmarks" = true ] && [[ "$line" =~ ^#\ B: ]]; then
+            local path="${line#\# B:}"
+            bookmarks+=("$path")
+        fi
+    done <<< "$SCRIPT_CONTENT"
 }
 
 save_bookmarks() {
-    printf '%s\n' "${bookmarks[@]}" > "$BOOKMARKS_FILE"
+    local tmp_file
+    tmp_file=$(mktemp)
+    local in_bookmarks=false
+    local bookmark_lines=()
+    
+    # Collect existing bookmark lines from SCRIPT_CONTENT
+    while IFS= read -r line; do
+        if [[ "$line" == "# BOOKMARK_START" ]]; then
+            in_bookmarks=true
+            continue
+        fi
+        if [[ "$line" == "# BOOKMARK_END" ]]; then
+            in_bookmarks=false
+            continue
+        fi
+        if [ "$in_bookmarks" = true ] && [[ "$line" =~ ^#\ B: ]]; then
+            bookmark_lines+=("$line")
+        fi
+    done <<< "$SCRIPT_CONTENT"
+    
+    # Write everything except old bookmark block, then insert new ones
+    in_bookmarks=false
+    while IFS= read -r line; do
+        if [[ "$line" == "# BOOKMARK_START" ]]; then
+            in_bookmarks=true
+            continue
+        fi
+        if [[ "$line" == "# BOOKMARK_END" ]]; then
+            in_bookmarks=false
+            echo "# BOOKMARK_END" >> "$tmp_file"
+            continue
+        fi
+        if [ "$in_bookmarks" = true ]; then
+            continue
+        fi
+        echo "$line" >> "$tmp_file"
+    done <<< "$SCRIPT_CONTENT"
+    
+    # Insert new bookmarks
+    echo "# BOOKMARK_START" >> "$tmp_file"
+    for i in "${!bookmarks[@]}"; do
+        echo "# B:${bookmarks[$i]}" >> "$tmp_file"
+    done
+    echo "# BOOKMARK_END" >> "$tmp_file"
+    
+    # Preserve permissions and overwrite
+    chmod +x "$tmp_file"
+    mv "$tmp_file" "$SCRIPT_PATH"
+    
+    # Update SCRIPT_CONTENT to reflect the new file
+    SCRIPT_CONTENT="$(cat "$SCRIPT_PATH")"
 }
 
 display_menu() {
     load_bookmarks
-    
+
     echo "========================================="
     echo " Directory Bookmarks ($MAX_BOOKMARKS limit)"
     echo "========================================="
@@ -67,9 +99,7 @@ display_menu() {
     else
         for i in "${!bookmarks[@]}"; do
             num=$((i + 1))
-            # Map number to letter
-            letter=$(printf '\\%03o' $((num + 96)))
-            letter=$(echo "$letter" | sed 's/\\//g')
+            letter=$(printf '\\%03o' $((num + 96)) | tr -d '\\')
             dir="${bookmarks[$i]}"
             dir_name=$(basename "$dir")
             if [ "$dir" = "$(pwd)" ]; then
@@ -163,10 +193,8 @@ delete_bookmark() {
     # Parse comma-separated numbers
     IFS=',' read -ra selections <<< "$input"
     deleted=0
-    new_bookmarks=()
     
     for sel in "${selections[@]}"; do
-        # Trim whitespace
         sel=$(echo "$sel" | xargs)
         if [[ "$sel" =~ ^[0-9]+$ ]]; then
             if [ "$sel" -ge 1 ] && [ "$sel" -le ${#bookmarks[@]} ]; then
@@ -182,6 +210,7 @@ delete_bookmark() {
     done
     
     # Rebuild array excluding deleted entries
+    local new_bookmarks=()
     for i in "${!bookmarks[@]}"; do
         num=$((i + 1))
         is_deleted=false
@@ -207,8 +236,20 @@ while true; do
     display_menu
     read -r -n 1 choice
     echo ""
+    # Drain remaining input (newline left by -n 1)
+    read -r -t 0.1 _drain 2>/dev/null || true
     
     case "$choice" in
+        [Qq])
+            echo "Exiting."
+            exit 0
+            ;;
+        [Aa])
+            add_bookmark
+            ;;
+        [Dd])
+            delete_bookmark
+            ;;
         [0-9])
             num="$choice"
             load_bookmarks
@@ -240,20 +281,13 @@ while true; do
                 echo "Error: Bookmark $choice not found."
             fi
             ;;
-        [Aa])
-            add_bookmark
-            ;;
-        [Dd])
-            delete_bookmark
-            ;;
-        [Qq])
-            echo "Exiting."
-            exit 0
-            ;;
         *)
             echo "Invalid option."
             ;;
     esac
     echo ""
-    read -r -p "Press Enter to continue..."
+    read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
 done
+
+# BOOKMARK_START
+# BOOKMARK_END
