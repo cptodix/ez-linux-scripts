@@ -83,6 +83,9 @@ for script_file in "$REPO_DIR"/scripts/*; do
     # Skip one-time scripts — run manually after install instead of installing to PATH
     [ "$script_name" = "install-win-fonts" ] && continue
     
+    # Skip files without a shebang line (e.g., docs, markdown, etc.)
+    head -1 "$script_file" | grep -q '^#!' || continue
+    
     target_path="$BIN_DIR/$script_name"
     
     echo " -> Installing script: $script_name -> $target_path"
@@ -118,25 +121,37 @@ fi
 echo "========================================="
 echo " Installation and shortcut generation complete!"
 
-# Execute one-time scripts
-for script_file in "$REPO_DIR"/scripts/*; do
-    [ -f "$script_file" ] || continue
-    
-    script_name=$(basename "$script_file")
-    
-    # Execute install-win-fonts after installation
-    if [ "$script_name" = "install-win-fonts" ]; then
+# Prompt user to run install-win-fonts
+if [ "$DRY_RUN" = false ]; then
+    echo ""
+    echo "========================================="
+    read -r -p "Would you like to install Windows fonts now? [y/N]: " run_fonts || true
+    if [[ "$run_fonts" =~ ^[Yy]$ ]]; then
         echo ""
         echo "========================================="
-        echo " Executing one-time script: $script_name"
+        echo " Executing: install-win-fonts"
         echo "========================================="
-        if [ "$DRY_RUN" = false ]; then
-            bash "$script_file"
-        else
-            echo "[DRY RUN] Would execute: $script_file"
-        fi
+        bash "$REPO_DIR/scripts/install-win-fonts"
+    else
+        echo "Skipping Windows fonts installation. You can run it manually later with: install-win-fonts"
     fi
-done
+fi
+
+# Add goto alias to ~/.bashrc if not already present
+if [ "$DRY_RUN" = false ]; then
+    BASHRC="$HOME/.bashrc"
+    GOTO_BIN="$BIN_DIR/goto"
+    if [ -f "$BASHRC" ] && grep -qF 'alias goto=' "$BASHRC"; then
+        echo " -> goto alias already present in $BASHRC"
+    else
+        echo "" >> "$BASHRC"
+        echo "# Goto directory bookmark manager alias" >> "$BASHRC"
+        echo "alias goto='. $GOTO_BIN'" >> "$BASHRC"
+        echo " -> Added goto alias to $BASHRC"
+    fi
+else
+    echo "[DRY RUN] Would add goto alias to ~/.bashrc"
+fi
 
 # Install update-scripts and configure it with this repository directory
 UPDATE_SCRIPT_SRC="$REPO_DIR/update-scripts"

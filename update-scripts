@@ -31,6 +31,9 @@ for script_file in "$REPO_DIR"/scripts/*; do
     # Skip one-time scripts — not installed to PATH
     [ "$script_name" = "install-win-fonts" ] && continue
     
+    # Skip files without a shebang line (e.g., docs, markdown, etc.)
+    head -1 "$script_file" | grep -q '^#!' || continue
+    
     target_path="$BIN_DIR/$script_name"
     desktop_file="$APP_DIR/${script_name}.desktop"
     
