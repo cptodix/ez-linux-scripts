@@ -32,6 +32,9 @@ for script_dir in "$REPO_DIR"/scripts/*/; do
     # Skip if no main script file exists
     [ -f "$script_file" ] || continue
     
+    # Skip one-time scripts — not installed to PATH
+    [ "$script_name" = "install-win-fonts" ] && continue
+    
     target_path="$BIN_DIR/$script_name"
     desktop_file="$APP_DIR/${script_name}.desktop"
     

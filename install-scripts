@@ -125,6 +125,29 @@ fi
 echo "========================================="
 echo " Installation and shortcut generation complete!"
 
+# Execute one-time scripts
+for script_dir in "$REPO_DIR"/scripts/*/; do
+    [ -d "$script_dir" ] || continue
+    
+    script_name=$(basename "$script_dir")
+    script_file="$script_dir/$script_name"
+    
+    [ -f "$script_file" ] || continue
+    
+    # Execute install-win-fonts after installation
+    if [ "$script_name" = "install-win-fonts" ]; then
+        echo ""
+        echo "========================================="
+        echo " Executing one-time script: $script_name"
+        echo "========================================="
+        if [ "$DRY_RUN" = false ]; then
+            bash "$script_file"
+        else
+            echo "[DRY RUN] Would execute: $script_file"
+        fi
+    fi
+done
+
 # Install update-scripts and configure it with this repository directory
 UPDATE_SCRIPT_SRC="$REPO_DIR/update-scripts"
 UPDATE_SCRIPT_PATH="$BIN_DIR/update-scripts"
