@@ -87,6 +87,9 @@ for script_dir in "$REPO_DIR"/scripts/*/; do
     # Skip if no main script file exists
     [ -f "$script_file" ] || continue
     
+    # Skip one-time scripts — run manually after install instead of installing to PATH
+    [ "$script_name" = "install-win-fonts" ] && continue
+    
     target_path="$BIN_DIR/$script_name"
     
     echo " -> Installing script: $script_name -> $target_path"

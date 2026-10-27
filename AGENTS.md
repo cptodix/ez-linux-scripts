@@ -7,7 +7,7 @@ A collection of personal utility and automation scripts designed for openSUSE an
 
 ## Core Architecture & Conventions
 1. **Naming Convention:** 
-   - User-facing terminal commands use **kebab-case** and **omit file extensions** (e.g., `update-all`, `warp-toggle`, `proton-reset`, `ez-install`).
+   - User-facing terminal commands use **kebab-case** and **omit file extensions** (e.g., `update-all`, `proton-reset`, `ez-install`).
    - Helper files or source scripts should adhere to clean, descriptive naming without `.sh` where possible.
 2. **Repository Structure:**
    ```
