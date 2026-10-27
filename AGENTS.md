@@ -7,7 +7,7 @@ A collection of personal utility and automation scripts designed for openSUSE an
 
 ## Core Architecture & Conventions
 1. **Naming Convention:**
-   - User-facing terminal commands use **kebab-case** and **omit file extensions** (e.g., `update-all`, `goto`, `proton-reset`, `ez-install`).
+   - User-facing terminal commands use **kebab-case** and **omit file extensions** (e.g., `pkg-update`, `goto`, `proton-reset`, `ez-install`).
    - Helper files or source scripts should adhere to clean, descriptive naming without `.sh` where possible.
 2. **Repository Structure:**
    ```
@@ -19,13 +19,13 @@ A collection of personal utility and automation scripts designed for openSUSE an
    ├── LICENSE
    ├── .gitignore
    └── scripts/                 # All script files live directly in scripts/
-       ├── agy-switch
+       ├── agy-auth
        ├── ez-install
-       ├── guest-visibility
        ├── goto
        ├── install-win-fonts
+       ├── pkg-update
        ├── proton-reset
-       └── update-all
+       └── sddm-guest
    ```
    - Each script is a single file directly under `scripts/` with kebab-case naming.
    - No subdirectories — just flat files.
@@ -51,11 +51,11 @@ A collection of personal utility and automation scripts designed for openSUSE an
 | [`update-scripts`](update-scripts) | Updates all installed scripts from the repository directory (hardcoded in the script by `install-scripts`). Skips up-to-date scripts. |
 | [`ez-install`](scripts/ez-install) | Universal archive installer (`.tar.gz`, `.zip`, `.AppImage`, etc.) that extracts to `~/.local/share`, links binaries to `~/.local/bin`, finds icons, and interactive category selection for `.desktop` shortcuts. |
 | [`proton-reset`](scripts/proton-reset) | Steam Proton troubleshooting utility that scans all storage libraries, lists installed games, backs up common savegame folders, deletes `compatdata` to reset Proton, and supports backup restore. |
-| [`update-all`](scripts/update-all) | Terminal-agnostic system updater (Zypper ref/dup + Flatpak update/cleanup) with an explicit exit prompt. |
+| [`pkg-update`](scripts/pkg-update) | Package updater (Zypper ref/dup + Flatpak update/cleanup) with an explicit exit prompt. |
 | [`install-win-fonts`](scripts/install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites (`ms-fonts`). Executed manually after install. |
 | [`goto`](scripts/goto) | Interactive directory bookmark manager — save, select, and jump to frequently used directories with number or letter shortcuts. |
-| [`guest-visibility`](scripts/guest-visibility) | Manages SDDM login manager guest account visibility (`hide`, `unhide`, `toggle`, `status`). Automatically creates the `guest` user if missing when unhiding. |
-| [`agy-switch`](scripts/agy-switch) | Utility for switching `antigravity-cli` between Gemini API Key mode and Google OAuth mode. |
+| [`sddm-guest`](scripts/sddm-guest) | Manages SDDM login manager guest account visibility (`hide`, `unhide`, `toggle`, `status`). Automatically creates the `guest` user if missing when unhiding. |
+| [`agy-auth`](scripts/agy-auth) | Utility for switching `antigravity-cli` between API Key and Google OAuth authentication modes. |
 
 ## Guidelines for AI Agents
 - **Do not add file extensions** (`.sh`) to user-facing scripts.
