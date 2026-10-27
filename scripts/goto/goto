@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+set -e
+
+# Configuration
+BOOKMARKS_FILE="$HOME/.local/share/bookmarks/bookmarks.list"
+MAX_BOOKMARKS=20
+
+# Ensure bookmarks directory and file exist
+mkdir -p "$(dirname "$BOOKMARKS_FILE")"
+touch "$BOOKMARKS_FILE"
+
+# Parse command-line arguments (number or character to jump directly)
+if [ $# -gt 0 ]; then
+    target="$1"
+    # Check if it's a number (1-9, 10-20)
+    if [[ "$target" =~ ^[0-9]+$ ]]; then
+        if [ "$target" -ge 1 ] && [ "$target" -le "$MAX_BOOKMARKS" ]; then
+            line=$(sed -n "${target}p" "$BOOKMARKS_FILE")
+            if [ -n "$line" ] && [ -d "$line" ]; then
+                cd "$line" && ls && exit 0
+            fi
+            echo "Error: Bookmark $target not found or directory does not exist."
+            exit 1
+        fi
+    fi
+    # Check if it's a single character (a-t)
+    if [[ "$target" =~ ^[a-tA-T]$ ]]; then
+        lower=$(echo "$target" | tr '[:upper:]' '[:lower:]')
+        index=$(( $(printf '%d' "'$lower") - 96 ))
+        line=$(sed -n "${index}p" "$BOOKMARKS_FILE")
+        if [ -n "$line" ] && [ -d "$line" ]; then
+            cd "$line" && ls && exit 0
+        fi
+        echo "Error: Bookmark $target not found or directory does not exist."
+        exit 1
+    fi
+    echo "Usage: $0 [number|letter]"
+    echo "  Number: 1-20"
+    echo "  Letter: a-t (maps to 1-20)"
+    exit 1
+fi
+
+# --- Helper Functions ---
+
+load_bookmarks() {
+    # Read non-empty lines into array
+    bookmarks=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && bookmarks+=("$line")
+    done < "$BOOKMARKS_FILE"
+}
+
+save_bookmarks() {
+    printf '%s\n' "${bookmarks[@]}" > "$BOOKMARKS_FILE"
+}
+
+display_menu() {
+    load_bookmarks
+    
+    echo "========================================="
+    echo " Directory Bookmarks ($MAX_BOOKMARKS limit)"
+    echo "========================================="
+    echo ""
+    
+    if [ ${#bookmarks[@]} -eq 0 ]; then
+        echo "  No bookmarks saved yet."
+    else
+        for i in "${!bookmarks[@]}"; do
+            num=$((i + 1))
+            # Map number to letter
+            letter=$(printf '\\%03o' $((num + 96)))
+            letter=$(echo "$letter" | sed 's/\\//g')
+            dir="${bookmarks[$i]}"
+            dir_name=$(basename "$dir")
+            if [ "$dir" = "$(pwd)" ]; then
+                echo "  $num) [$letter] $dir_name * (current)"
+            else
+                echo "  $num) [$letter] $dir_name"
+            fi
+        done
+    fi
+    
+    echo ""
+    echo "  [a] Add bookmark"
+    echo "  [d] Delete bookmark(s)"
+    echo "  [q] Quit"
+    echo ""
+    echo "========================================="
+}
+
+add_bookmark() {
+    echo ""
+    echo "Enter directory path (press Enter to cancel):"
+    read -r dir
+    
+    if [ -z "$dir" ]; then
+        echo "Cancelled."
+        return
+    fi
+    
+    # Expand ~ to home directory
+    dir="${dir/#\~/$HOME}"
+    
+    # Resolve to absolute path
+    if [[ "$dir" != /* ]]; then
+        dir="$PWD/$dir"
+    fi
+    dir="$(cd "$dir" 2>/dev/null && pwd)" || {
+        echo "Error: Directory does not exist: $dir"
+        return
+    }
+    
+    # Check if already bookmarked
+    for existing in "${bookmarks[@]}"; do
+        if [ "$existing" = "$dir" ]; then
+            echo "Bookmark already exists: $dir"
+            return
+        fi
+    done
+    
+    # Check limit
+    if [ ${#bookmarks[@]} -ge $MAX_BOOKMARKS ]; then
+        echo "Error: Bookmark limit reached ($MAX_BOOKMARKS). Delete some first."
+        return
+    fi
+    
+    bookmarks+=("$dir")
+    save_bookmarks
+    echo "Added: $dir"
+}
+
+delete_bookmark() {
+    load_bookmarks
+    
+    if [ ${#bookmarks[@]} -eq 0 ]; then
+        echo "No bookmarks to delete."
+        return
+    fi
+    
+    echo ""
+    echo "Select bookmark(s) to delete (comma-separated numbers, 'a' for all, or press Enter to cancel):"
+    for i in "${!bookmarks[@]}"; do
+        num=$((i + 1))
+        dir_name=$(basename "${bookmarks[$i]}")
+        echo "  $num) $dir_name"
+    done
+    echo ""
+    read -r input
+    
+    if [ -z "$input" ]; then
+        echo "Cancelled."
+        return
+    fi
+    
+    if [ "$input" = "a" ]; then
+        echo "Deleting all bookmarks..."
+        bookmarks=()
+        save_bookmarks
+        echo "All bookmarks deleted."
+        return
+    fi
+    
+    # Parse comma-separated numbers
+    IFS=',' read -ra selections <<< "$input"
+    deleted=0
+    new_bookmarks=()
+    
+    for sel in "${selections[@]}"; do
+        # Trim whitespace
+        sel=$(echo "$sel" | xargs)
+        if [[ "$sel" =~ ^[0-9]+$ ]]; then
+            if [ "$sel" -ge 1 ] && [ "$sel" -le ${#bookmarks[@]} ]; then
+                dir_name=$(basename "${bookmarks[$((sel - 1))]}")
+                echo "  Deleting: $dir_name"
+                deleted=$((deleted + 1))
+            else
+                echo "  Invalid: $sel"
+            fi
+        else
+            echo "  Invalid: $sel"
+        fi
+    done
+    
+    # Rebuild array excluding deleted entries
+    for i in "${!bookmarks[@]}"; do
+        num=$((i + 1))
+        is_deleted=false
+        for sel in "${selections[@]}"; do
+            sel=$(echo "$sel" | xargs)
+            if [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -eq "$num" ]; then
+                is_deleted=true
+                break
+            fi
+        done
+        if [ "$is_deleted" = false ]; then
+            new_bookmarks+=("${bookmarks[$i]}")
+        fi
+    done
+    
+    bookmarks=("${new_bookmarks[@]}")
+    save_bookmarks
+    echo "Deleted $deleted bookmark(s)."
+}
+
+# --- Main Loop ---
+while true; do
+    display_menu
+    read -r -n 1 choice
+    echo ""
+    
+    case "$choice" in
+        [0-9])
+            num="$choice"
+            load_bookmarks
+            if [ -n "${bookmarks[$((num - 1))]+x}" ]; then
+                dir="${bookmarks[$((num - 1))]}"
+                if [ -d "$dir" ]; then
+                    cd "$dir" && ls
+                    exit 0
+                else
+                    echo "Error: Directory does not exist: $dir"
+                fi
+            else
+                echo "Error: Bookmark $num not found."
+            fi
+            ;;
+        [a-tA-T])
+            lower=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
+            index=$(( $(printf '%d' "'$lower") - 96 ))
+            load_bookmarks
+            if [ -n "${bookmarks[$((index - 1))]+x}" ]; then
+                dir="${bookmarks[$((index - 1))]}"
+                if [ -d "$dir" ]; then
+                    cd "$dir" && ls
+                    exit 0
+                else
+                    echo "Error: Directory does not exist: $dir"
+                fi
+            else
+                echo "Error: Bookmark $choice not found."
+            fi
+            ;;
+        [Aa])
+            add_bookmark
+            ;;
+        [Dd])
+            delete_bookmark
+            ;;
+        [Qq])
+            echo "Exiting."
+            exit 0
+            ;;
+        *)
+            echo "Invalid option."
+            ;;
+    esac
+    echo ""
+    read -r -p "Press Enter to continue..."
+done

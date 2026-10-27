@@ -15,10 +15,10 @@ opensuse_scripts/
     ├── agy-switch/          #   └── agy-switch
     ├── ez-install/          #   └── ez-install
     ├── guest-visibility/    #   └── guest-visibility
+    ├── goto/                #   └── goto
     ├── install-win-fonts/   #   └── install-win-fonts
     ├── proton-reset/        #   └── proton-reset
     ├── update-all/          #   └── update-all
-    └── warp-toggle/         #   └── warp-toggle
 ```
 
 Each script has its own subdirectory for future extensibility (icons, docs, patches, configs).
@@ -45,8 +45,8 @@ update-scripts
 | [`ez-install`](scripts/ez-install) | Universal archive installer (`.tar.gz`, `.zip`, `.AppImage`, etc.) that extracts to `~/.local/share`, links binaries to `~/.local/bin`, finds icons, and interactive category selection for `.desktop` shortcuts. |
 | [`proton-reset`](scripts/proton-reset) | Steam Proton troubleshooting utility that scans all storage libraries, lists installed games, backs up common savegame folders, deletes `compatdata` to reset Proton, and supports backup restore (`--restore`). |
 | [`update-all`](scripts/update-all) | Terminal-agnostic system updater (Zypper ref/dup + Flatpak update/cleanup) with an explicit exit prompt. |
-| [`install-win-fonts`](scripts/install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites (`ms-fonts`). |
-| [`warp-toggle`](scripts/warp-toggle) | Toggles Cloudflare WARP connection status with desktop notifications (`notify-send`). |
+| [`install-win-fonts`](scripts/install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites (`ms-fonts`). Executed manually after install. |
+| [`goto`](scripts/goto) | Interactive directory bookmark manager — save, select, and jump to frequently used directories with number or letter shortcuts. |
 | [`guest-visibility`](scripts/guest-visibility) | Manages SDDM login manager guest account visibility (`hide`, `unhide`, `toggle`, `status`). Automatically creates the `guest` user if missing when unhiding. |
 | [`agy-switch`](scripts/agy-switch) | Utility for switching `antigravity-cli` between Gemini API Key mode and Google OAuth mode. |
 
