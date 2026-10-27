@@ -103,6 +103,7 @@ add_bookmark() {
     bookmarks+=("$dir")
     save_bookmarks
     echo "Added: $dir"
+    read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
 }
 
 delete_bookmark() {
@@ -173,6 +174,7 @@ delete_bookmark() {
     bookmarks=("${new_bookmarks[@]}")
     save_bookmarks
     echo "Deleted $deleted bookmark(s)."
+    read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
 }
 
 execute_cd() {
@@ -241,6 +243,4 @@ while true; do
             echo "Invalid option."
             ;;
     esac
-    echo ""
-    read -r -p "Press Enter to continue..." < /dev/tty 2>/dev/null || true
 done
