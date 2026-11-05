@@ -1,23 +1,52 @@
 #!/usr/bin/env bash
 set -e
 
+# ez-linux-scripts updater (online)
+# Downloads the latest repository as an archive, extracts it to a temporary
+# directory, syncs the installed scripts from there, then removes the temp files.
+
 # Target directories
 BIN_DIR="$HOME/.local/bin"
 APP_DIR="$HOME/.local/share/applications"
 
-# Repository directory (set by install-scripts)
-REPO_DIR="REPO_DIR_PLACEHOLDER"
-
-if [ ! -d "$REPO_DIR" ]; then
-    echo "Error: Repository directory not configured or does not exist."
-    echo "Please run './install-scripts' from the repository to set it up."
-    exit 1
-fi
+# Remote repository
+REPO_URL="https://github.com/cptodix/ez-linux-scripts"
+BRANCH="main"
 
 mkdir -p "$BIN_DIR" "$APP_DIR"
 
 echo "========================================="
-echo " Updating scripts from: $REPO_DIR"
+echo " Fetching latest ez-linux-scripts ($BRANCH branch)"
+echo "========================================="
+
+# Make sure required tools are available
+if ! command -v tar &> /dev/null; then
+    echo "Error: 'tar' is not available." >&2
+    exit 1
+fi
+if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+    echo "Error: neither 'curl' nor 'wget' is available." >&2
+    exit 1
+fi
+
+# Download and extract the repository into a temporary directory
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ez-linux-scripts-update.XXXXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+TMP_ARCHIVE="$TMP_DIR/repo.tar.gz"
+if command -v curl &> /dev/null; then
+    curl -fsSL "$REPO_URL/archive/refs/heads/$BRANCH.tar.gz" -o "$TMP_ARCHIVE"
+else
+    wget -q "$REPO_URL/archive/refs/heads/$BRANCH.tar.gz" -O "$TMP_ARCHIVE"
+fi
+
+tar -xzf "$TMP_ARCHIVE" -C "$TMP_DIR" --strip-components=1
+
+# Sync the installed scripts from the temporary extraction
+REPO_DIR="$TMP_DIR"
+
+echo "========================================="
+echo " Updating scripts from remote repository"
 echo "========================================="
 
 updated=0

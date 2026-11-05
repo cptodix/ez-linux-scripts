@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 set -e
 
+# ez-linux-scripts installer (online)
+# Downloads the repository as an archive, extracts it to a temporary directory,
+# performs the full installation, then removes the temporary files.
+
 # Target directories
 BIN_DIR="$HOME/.local/bin"
 APP_DIR="$HOME/.local/share/applications"
 
-# Get the directory where this script resides
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Remote repository
+REPO_URL="https://github.com/cptodix/ez-linux-scripts"
+BRANCH="main"
 
 DRY_RUN=false
 UNINSTALL=false
@@ -29,6 +34,41 @@ for arg in "$@"; do
     esac
 done
 
+# --- Fetch the repository into a temporary directory ---
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN MODE - No changes will be written]"
+fi
+
+# Make sure required tools are available
+if ! command -v tar &> /dev/null; then
+    echo "Error: 'tar' is not available." >&2
+    exit 1
+fi
+if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+    echo "Error: neither 'curl' nor 'wget' is available." >&2
+    exit 1
+fi
+
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ez-linux-scripts.XXXXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "========================================="
+echo " Fetching ez-linux-scripts ($BRANCH branch)"
+echo "========================================="
+
+TMP_ARCHIVE="$TMP_DIR/repo.tar.gz"
+if command -v curl &> /dev/null; then
+    curl -fsSL "$REPO_URL/archive/refs/heads/$BRANCH.tar.gz" -o "$TMP_ARCHIVE"
+else
+    wget -q "$REPO_URL/archive/refs/heads/$BRANCH.tar.gz" -O "$TMP_ARCHIVE"
+fi
+
+tar -xzf "$TMP_ARCHIVE" -C "$TMP_DIR" --strip-components=1
+
+# The extracted repository now lives in this temporary directory
+REPO_DIR="$TMP_DIR"
+
+# --- Uninstall ---
 if [ "$UNINSTALL" = true ]; then
     echo "========================================="
     echo " Uninstalling scripts and shortcuts..."
@@ -62,10 +102,7 @@ if [ "$UNINSTALL" = true ]; then
     exit 0
 fi
 
-if [ "$DRY_RUN" = true ]; then
-    echo "[DRY RUN MODE - No changes will be written]"
-fi
-
+# --- Install ---
 echo "========================================="
 echo " Installing scripts to $BIN_DIR"
 echo " and generating .desktop shortcuts in $APP_DIR"
@@ -125,7 +162,8 @@ echo " Installation and shortcut generation complete!"
 if [ "$DRY_RUN" = false ]; then
     echo ""
     echo "========================================="
-    read -r -p "Would you like to install Windows fonts now? [y/N]: " run_fonts || true
+    echo -n "Would you like to install Windows fonts now? [y/N]: "
+    read -r run_fonts < /dev/tty 2>/dev/null || true
     if [[ "$run_fonts" =~ ^[Yy]$ ]]; then
         echo ""
         echo "========================================="
@@ -140,8 +178,7 @@ fi
 # Add goto alias to ~/.bashrc if not already present
 if [ "$DRY_RUN" = false ]; then
     BASHRC="$HOME/.bashrc"
-    GOTO_BIN="$BIN_DIR/goto"
-    if [ -f "$BASHRC" ] && grep -qxF 'alias goto=". goto"' "$BASHRC"; then
+    if [ -f "$BASHRC" ] && grep -qxF "alias goto='. goto'" "$BASHRC"; then
         echo " -> goto alias already present in $BASHRC"
     else
         echo "" >> "$BASHRC"
@@ -153,13 +190,15 @@ else
     echo "[DRY RUN] Would add goto alias to ~/.bashrc"
 fi
 
-# Install update-scripts and configure it with this repository directory
-UPDATE_SCRIPT_SRC="$REPO_DIR/update-scripts"
-UPDATE_SCRIPT_PATH="$BIN_DIR/update-scripts"
-if [ -f "$UPDATE_SCRIPT_SRC" ]; then
-    [ "$DRY_RUN" = false ] && cp -f "$UPDATE_SCRIPT_SRC" "$UPDATE_SCRIPT_PATH"
-    [ "$DRY_RUN" = false ] && chmod +x "$UPDATE_SCRIPT_PATH"
-    [ "$DRY_RUN" = false ] && sed -i "s|REPO_DIR_PLACEHOLDER|${REPO_DIR}|g" "$UPDATE_SCRIPT_PATH"
-    echo " -> Installed and configured update-scripts with repo directory: $REPO_DIR"
+# Install self-contained online update-scripts to ~/.local/bin
+if [ "$DRY_RUN" = false ]; then
+    cp -f "$REPO_DIR/update-scripts" "$BIN_DIR/update-scripts"
+    chmod +x "$BIN_DIR/update-scripts"
+    echo " -> Installed update-scripts to $BIN_DIR/update-scripts"
+else
+    echo "[DRY RUN] Would install update-scripts to $BIN_DIR/update-scripts"
 fi
+
+echo "========================================="
+echo " Temporary files cleaned up automatically."
 echo "========================================="
