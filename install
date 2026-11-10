@@ -74,10 +74,15 @@ if [ "$UNINSTALL" = true ]; then
     echo " Uninstalling scripts and shortcuts..."
     echo "========================================="
     
+    # Mirror the install logic: only remove what install actually deploys.
+    # Ignore the fonts installer and any non-script files (never installed).
     for script_file in "$REPO_DIR"/scripts/*; do
         [ -f "$script_file" ] || continue
         
         script_name=$(basename "$script_file")
+        
+        [ "$script_name" = "install-win-fonts" ] && continue
+        head -1 "$script_file" | grep -q '^#!' || continue
         
         target_bin="$BIN_DIR/$script_name"
         target_desktop="$APP_DIR/${script_name}.desktop"
@@ -91,6 +96,13 @@ if [ "$UNINSTALL" = true ]; then
             [ "$DRY_RUN" = false ] && rm -f "$target_desktop"
         fi
     done
+    
+    # Remove the self-contained updater that install places in ~/.local/bin
+    target_update="$BIN_DIR/update-scripts"
+    if [ -f "$target_update" ]; then
+        echo " -> Removing binary: $target_update"
+        [ "$DRY_RUN" = false ] && rm -f "$target_update"
+    fi
     
     if command -v update-desktop-database &> /dev/null && [ "$DRY_RUN" = false ]; then
         update-desktop-database "$APP_DIR" 2>/dev/null || true
