@@ -23,56 +23,84 @@ filename=$(basename "$ARCHIVE")
 extension="${filename##*.}"
 
 # ==========================================
-# Handle AppImage special case via GearLever
+# Handle AppImage directly (no GearLever)
 # ==========================================
+APPIMAGE_DIRECT=false
 if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
+    APPIMAGE_DIRECT=true
+    
     echo "========================================="
     echo " Processing AppImage: $filename"
     echo "========================================="
     
-    # Resolve GearLever command
-    gearlever_cmd=""
-    if command -v gearlever &> /dev/null; then
-        gearlever_cmd="gearlever"
-    elif flatpak info it.mijorus.gearlever &> /dev/null; then
-        gearlever_cmd="flatpak run it.mijorus.gearlever"
-    else
-        echo "-> GearLever not found. Installing GearLever..."
-        installed_via_native=false
-        
-        if command -v zypper &> /dev/null; then
-            echo "-> Attempting installation via zypper..."
-            if sudo zypper install -y gearlever; then
-                installed_via_native=true
-                gearlever_cmd="gearlever"
-            fi
-        fi
-        
-        if [ "$installed_via_native" = false ]; then
-            echo "-> Installing GearLever from Flathub (Flatpak)..."
-            if ! command -v flatpak &> /dev/null; then
-                echo "Error: Neither zypper nor flatpak found to install GearLever."
-                exit 1
-            fi
-            flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
-            flatpak install -y flathub it.mijorus.gearlever
-            gearlever_cmd="flatpak run it.mijorus.gearlever"
-        fi
+    # Derive app slug + pretty name from the file name
+    app_slug=$(echo "$filename" | sed -E 's/\.(AppImage|appimage)$//I' | tr '[:upper:]' '[:lower:]' | tr '_' '-' | tr ' ' '-')
+    pretty_name=$(echo "$app_slug" | sed 's/-/ /g; s/_/ /g' | sed -E 's/([a-z0-9])([A-Z])/\1 \2/g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}')
+    echo "Detected App Name: $pretty_name (Slug: $app_slug)"
+    
+    # Store the AppImage in a stable location (AppImages should not be moved after integration)
+    appimages_dir="$SHARE_DIR/appimages"
+    mkdir -p "$appimages_dir"
+    app_path="$appimages_dir/$filename"
+    cp -f "$ARCHIVE" "$app_path"
+    chmod +x "$app_path"
+    echo " -> Stored AppImage at: $app_path"
+    
+    # Symlink into ~/.local/bin for terminal use
+    symlink_path="$BIN_DIR/$app_slug"
+    ln -sf "$app_path" "$symlink_path"
+    echo " -> Created symlink: $symlink_path -> $app_path"
+    
+    # Extract embedded icon + .desktop metadata via the AppImage runtime
+    TEMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TEMP_DIR"' EXIT
+    ( cd "$TEMP_DIR" && "$app_path" --appimage-extract >/dev/null 2>&1 || true )
+    extracted_root="$TEMP_DIR/squashfs-root"
+    
+    # Embedded .desktop entry (for icon + categories)
+    embedded_desktop=""
+    if [ -d "$extracted_root" ]; then
+        embedded_desktop=$(find "$extracted_root" -maxdepth 2 -name '*.desktop' 2>/dev/null | head -1 || true)
     fi
     
-    # Integrate AppImage using GearLever
-    echo "-> Integrating AppImage with GearLever..."
-    $gearlever_cmd --integrate "$ARCHIVE"
+    # Categories from the embedded .desktop
+    EMBEDDED_CATEGORIES=""
+    if [ -n "$embedded_desktop" ]; then
+        EMBEDDED_CATEGORIES=$(grep -m1 '^Categories=' "$embedded_desktop" 2>/dev/null | cut -d= -f2- | tr -d ' \r' || true)
+    fi
     
-    echo "========================================="
-    echo " AppImage successfully integrated!"
-    echo "========================================="
-    exit 0
+    # Icon: prefer the one referenced by the embedded .desktop
+    icon_path=""
+    if [ -n "$embedded_desktop" ]; then
+        icon_ref=$(grep -m1 '^Icon=' "$embedded_desktop" 2>/dev/null | cut -d= -f2- | tr -d ' \r' || true)
+        if [ -n "$icon_ref" ]; then
+            icon_base=$(basename "$icon_ref")
+            icon_path=$(find "$extracted_root" -type f \( -name "$icon_base" -o -name "$icon_base.png" -o -name "$icon_base.svg" -o -name "$icon_base.xpm" \) 2>/dev/null | head -1 || true)
+        fi
+    fi
+    [ -z "$icon_path" ] && icon_path=$(find "$extracted_root" -type f \( -name '*.png' -o -name '*.svg' \) 2>/dev/null | sort -r | head -1 || true)
+    
+    # Copy the icon to a persistent location (the extraction temp dir is removed on exit)
+    if [ -n "$icon_path" ]; then
+        icons_dir="$SHARE_DIR/icons"
+        mkdir -p "$icons_dir"
+        icon_ext="${icon_path##*.}"
+        persisted_icon="$icons_dir/${app_slug}.${icon_ext}"
+        cp -f "$icon_path" "$persisted_icon"
+        icon_path="$persisted_icon"
+        echo " -> Found icon: $persisted_icon"
+    else
+        echo " -> No icon found in AppImage."
+    fi
+    
+    # Launch via the stable path (more reliable than a symlink for AppImages)
+    launch_path="$app_path"
 fi
 
 # ==========================================
 # Handle standard archives (.tar.gz, .zip, etc.)
 # ==========================================
+if [ "$APPIMAGE_DIRECT" != true ]; then
 
 # Create a temporary working directory
 TEMP_DIR=$(mktemp -d)
@@ -98,8 +126,10 @@ case "$filename" in
         }
         ;;
 esac
+fi
 
 # Check top-level items in TEMP_DIR
+if [ "$APPIMAGE_DIRECT" != true ]; then
 top_items=("$TEMP_DIR"/*)
 if [ ${#top_items[@]} -eq 1 ] && [ -d "${top_items[0]}" ]; then
     extracted_root="${top_items[0]}"
@@ -162,7 +192,12 @@ ln -sf "$main_bin" "$symlink_path"
 chmod +x "$main_bin"
 echo "Created symlink: $symlink_path -> $main_bin"
 
+# Launch via the symlink for regular archives
+launch_path="$symlink_path"
+fi
+
 # Find Icon
+if [ "$APPIMAGE_DIRECT" != true ]; then
 icon_path=""
 while IFS= read -r icon; do
     if [[ "$icon" == *.png ]] || [[ "$icon" == *.svg ]]; then
@@ -176,7 +211,13 @@ if [ -n "$icon_path" ]; then
 else
     echo "No icon found in archive."
 fi
+fi
 
+# Categories: use embedded AppImage categories if available, else prompt
+if [ "$APPIMAGE_DIRECT" = true ] && [ -n "$EMBEDDED_CATEGORIES" ]; then
+    chosen_cats="$EMBEDDED_CATEGORIES"
+    echo "Using embedded categories: $chosen_cats"
+else
 # Categories Gathering
 echo "Gathering system categories..."
 declare -A cat_map
@@ -221,6 +262,7 @@ if [ -n "$cat_selection" ]; then
     done
 fi
 [ -z "$chosen_cats" ] && chosen_cats="Utility;Application;"
+fi
 
 # Create .desktop file
 desktop_file="$APP_DIR/${app_slug}.desktop"
@@ -230,7 +272,7 @@ cat << EOF > "$desktop_file"
 [Desktop Entry]
 Type=Application
 Name=$pretty_name
-Exec=$symlink_path
+Exec=$launch_path
 Terminal=false
 Categories=$chosen_cats
 EOF
