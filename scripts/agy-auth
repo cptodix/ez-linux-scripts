@@ -13,15 +13,14 @@ shift # Remove first argument so remaining args pass to 'agy'
 
 case "$MODE" in
     api|key|gemini)
-        # Use provided key or ask for one if GEMINI_API_KEY isn't exported
-        if [ -n "$1" ] && [[ "$1" == AIza* ]]; then
-            export GEMINI_API_KEY="$1"
-            shift
-        elif [ -z "$GEMINI_API_KEY" ]; then
+        # Prefer an already-exported key; otherwise prompt silently.
+        # Never take the key as a CLI argument — that lands in shell history.
+        if [ -z "$GEMINI_API_KEY" ]; then
             echo -n "Enter Google AI Studio API Key: "
-            read -r GEMINI_API_KEY
-            export GEMINI_API_KEY
+            read -s -r GEMINI_API_KEY
+            echo ""
         fi
+        export GEMINI_API_KEY
 
         # Set modelProvider to gemini
         python3 -c "
@@ -54,11 +53,14 @@ with open(p, 'w') as f: json.dump(data, f, indent=2)
         ;;
 
     *)
-        echo "Usage: agy-switch [api|oauth] [optional_key_or_flags]"
+        echo "Usage: agy-switch [api|oauth] [flags]"
         echo ""
         echo "Examples:"
         echo "  agy-switch api                   # Switch to API key mode and launch agy"
-        echo "  agy-switch api AIzaSy...         # Set specific key and launch agy"
         echo "  agy-switch oauth                 # Switch to Google OAuth and launch agy"
+        echo ""
+        echo "In API mode, export GEMINI_API_KEY beforehand or you will be"
+        echo "prompted for it (input is hidden). Do not pass the key as an"
+        echo "argument — it would be saved to your shell history."
         ;;
 esac

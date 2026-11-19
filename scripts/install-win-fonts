@@ -6,6 +6,7 @@ set -e
 # Define directories
 FONT_DIR="$HOME/.local/share/fonts/ms-fonts"
 TEMP_DIR="$HOME/Downloads/ms_fonts_ultimate_temp"
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "========================================="
 echo " Creating local Microsoft font directory"
@@ -30,28 +31,32 @@ echo "-> Fetching Aptos production package..."
 wget -O "$TEMP_DIR/aptos.zip" "https://download.microsoft.com/download/8/6/0/860a94fa-7feb-44ef-ac79-c072d9113d69/Microsoft%20Aptos%20Fonts.zip"
 
 echo "========================================="
+echo " Verifying Downloads"
+echo "========================================="
+
+# Reject corrupt/truncated downloads before extracting anything
+for zip in windows-core office-365 aptos; do
+    if ! unzip -tq "$TEMP_DIR/$zip.zip" >/dev/null 2>&1; then
+        echo "Error: '$zip.zip' failed integrity check (truncated or corrupt download)."
+        exit 1
+    fi
+done
+
+echo "========================================="
 echo " Extracting and Mass-Installing Fonts"
 echo "========================================="
 
-# Unpack Base Windows Fonts
-echo "-> Processing system fonts..."
-unzip -q "$TEMP_DIR/windows-core.zip" -d "$TEMP_DIR/core_extracted"
-find "$TEMP_DIR/core_extracted" -type f \( -name "*.ttf" -o -name "*.TTF" -o -name "*.otf" -o -name "*.OTF" \) -exec mv {} "$FONT_DIR/" \;
-
-# Unpack Microsoft 365 Cloud Fonts
-echo "-> Processing modern cloud fonts..."
-unzip -q "$TEMP_DIR/office-365.zip" -d "$TEMP_DIR/365_extracted"
-find "$TEMP_DIR/365_extracted" -type f \( -name "*.ttf" -o -name "*.TTF" -o -name "*.otf" -o -name "*.OTF" \) -exec mv {} "$FONT_DIR/" \;
-
-# Unpack Aptos Fonts
-echo "-> Processing Aptos suite..."
-unzip -q "$TEMP_DIR/aptos.zip" -d "$FONT_DIR/"
+# Unpack each archive into its own subdir, then move only font files.
+# Never extract directly into the live fonts dir — a bad zip must not drop
+# arbitrary files there.
+for zip in windows-core office-365 aptos; do
+    echo "-> Processing $zip..."
+    unzip -q "$TEMP_DIR/$zip.zip" -d "$TEMP_DIR/${zip}_extracted"
+    find "$TEMP_DIR/${zip}_extracted" -type f \( -name "*.ttf" -o -name "*.TTF" -o -name "*.otf" -o -name "*.OTF" \) -exec mv {} "$FONT_DIR/" \;
+done
 
 echo "========================================="
-echo " Cleaning Up Temporary Archives"
-echo "========================================="
-rm -rf "$TEMP_DIR"
-
+echo " Building Font Architecture Matrix"
 echo "========================================="
 echo " Building Font Architecture Matrix"
 echo "========================================="

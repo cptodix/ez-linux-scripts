@@ -190,7 +190,7 @@ fi
 # Add goto alias to ~/.bashrc if not already present
 if [ "$DRY_RUN" = false ]; then
     BASHRC="$HOME/.bashrc"
-    if [ -f "$BASHRC" ] && grep -qxF "alias goto='. goto'" "$BASHRC"; then
+    if [ -f "$BASHRC" ] && grep -qE '^alias goto=' "$BASHRC"; then
         echo " -> goto alias already present in $BASHRC"
     else
         echo "" >> "$BASHRC"
