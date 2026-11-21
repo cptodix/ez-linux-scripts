@@ -1,65 +1,157 @@
 # ez-linux-scripts
 
-A collection of personal utility and automation scripts for openSUSE and Linux environments, optimized for quick terminal use and desktop integration.
+A collection of personal utility and automation scripts for openSUSE and Linux, built for quick terminal use and desktop integration.
 
-No cloning required — everything installs and updates straight from the remote repository.
+No cloning needed — installation and updates pull straight from the remote repository.
 
 ## Install
 
-Run the online installer (downloads the latest repository, installs everything, then cleans up):
+One command installs everything (all scripts, desktop shortcuts, and the updater):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cptodix/ez-linux-scripts/main/install | bash
 ```
 
-What it does:
-- Downloads the latest repository as an archive (into a temporary directory)
-- Installs all scripts to `~/.local/bin` and makes them executable
-- Generates `.desktop` shortcuts in `~/.local/share/applications/`
-- Adds `alias goto='. goto'` to `~/.bashrc` (used by the `goto` bookmark manager) — skipped if already present
-- Installs `update-scripts` for future updates
-- Asks whether to run `install-win-fonts` (default: no)
-- Removes all temporary files when done
+What the installer does:
 
-> Tip: You can keep a local copy of `install` for offline use (`./install`), or just re-run the curl command anytime.
+- Downloads the latest repository into a temporary directory, then deletes it when done
+- Copies every script into `~/.local/bin` and makes it executable
+- Creates `.desktop` shortcuts in `~/.local/share/applications/`
+- Adds the `goto` alias to `~/.bashrc`
+- Installs `update-scripts` so you can update later
+- Offers to install the Windows fonts (default: no)
+
+Preview what it will do without making changes:
+
+```bash
+./install --dry-run
+```
+
+> After installing, open a new terminal (or run `source ~/.bashrc`) so the `goto` alias is available.
 
 ## Update
-
-Keep every installed script up to date from the remote repository (only changed files are overwritten):
 
 ```bash
 update-scripts
 ```
 
-This fetches the latest repository as an archive into a temporary directory, syncs your installed scripts, and deletes the temporary files when done.
+Fetches the latest repository and overwrites only the scripts that actually changed. No arguments needed.
 
 ## Uninstall
-
-Remove all installed scripts and their `.desktop` shortcuts:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cptodix/ez-linux-scripts/main/install | bash -s -- --uninstall
 ```
 
-Or, if you have a local copy:
+Or with a local `install` copy:
 
 ```bash
 ./install --uninstall
 ```
 
-## Usage
+This removes the installed scripts and their desktop shortcuts. Your fonts, bookmarks, and other personal files are left alone.
 
-All scripts are installed as terminal commands in `~/.local/bin`:
+## Scripts
 
-| Command | Description |
-| ------- | ----------- |
-| [`ez-install`](scripts/ez-install) | Universal archive installer (`.tar.gz`, `.zip`, `.AppImage`, etc.) that extracts to `~/.local/share`, links binaries to `~/.local/bin`, finds icons, and interactive category selection for `.desktop` shortcuts. |
-| [`proton-reset`](scripts/proton-reset) | Steam Proton troubleshooting utility that scans all storage libraries, lists installed games, backs up common savegame folders, deletes `compatdata` to reset Proton, and supports backup restore (`--restore`). |
-| [`pkg-update`](scripts/pkg-update) | Package updater (Zypper ref/dup + Flatpak update/cleanup) with an explicit exit prompt. |
-| [`install-win-fonts`](scripts/install-win-fonts) | Downloads and installs complete Microsoft Windows & Office 365 font suites (`ms-fonts`). Executed manually after install. |
-| [`goto`](scripts/goto) | Interactive directory bookmark manager — save, select, and jump to frequently used directories with numeric shortcuts. |
-| [`sddm-guest`](scripts/sddm-guest) | Manages SDDM login manager guest account visibility (`hide`, `unhide`, `toggle`, `status`). Automatically creates the `guest` user if missing when unhiding. |
-| [`agy-auth`](scripts/agy-auth) | Utility for switching `antigravity-cli` between API Key and Google OAuth authentication modes. |
+Every script below is installed as a command in `~/.local/bin`. The examples assume that directory is on your `$PATH`.
+
+### `ez-install` — install a downloaded app from an archive or AppImage
+
+Unpacks an archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.txz`, `.tar.bz2`, `.tbz2`, `.zip`) or an AppImage, stores it under `~/.local/share`, links the program into `~/.local/bin`, finds an icon, and creates a desktop shortcut (asking for a category when the app doesn't provide one).
+
+```bash
+ez-install ~/Downloads/SomeApp.tar.gz
+ez-install ~/Downloads/tool.zip
+ez-install ~/Downloads/SomeApp.AppImage
+```
+
+Archives are extracted to `~/.local/share/<app-name>/`; AppImages are stored in `~/.local/share/appimages/`.
+
+### `pkg-update` — update the whole system (openSUSE + Flatpak)
+
+Refreshes zypper, runs a full distribution upgrade, updates Flatpaks, and removes unused ones — then waits for you to press Enter. It opens its own terminal window (konsole, gnome-terminal, and a few others are supported).
+
+```bash
+pkg-update
+```
+
+> `pkg-update` uses `zypper dup` (full upgrade) and asks for your sudo password.
+
+### `proton-reset` — reset a Steam game's Proton prefix
+
+Scans all your Steam libraries (native and Flatpak), lists installed games, backs up the common save folders, then deletes the game's `compatdata` folder so Proton rebuilds it fresh on the next launch. You can restore a backup afterward.
+
+```bash
+proton-reset                    # list games, pick number(s), back up + reset
+proton-reset --restore <file>   # restore a previous backup (then pick the game)
+```
+
+Interactively it asks for a game number — or several, space-separated. Backups are saved under `.../steamapps/compatdata/<appid>/backup/`.
+
+### `install-win-fonts` — install the Microsoft font suites
+
+Downloads the Windows, Office 365, and Aptos fonts, installs them to `~/.local/share/fonts/ms-fonts`, and rebuilds the font cache.
+
+```bash
+install-win-fonts
+```
+
+> Also offered at the end of `install` (default: no).
+
+### `goto` — bookmark and jump between directories
+
+A numeric bookmark manager for folders. It runs through a sourced alias, so `cd` changes your *current* shell.
+
+```bash
+goto        # open the menu
+goto 3      # jump straight to bookmark #3
+```
+
+In the menu: `a` add a bookmark, `d` delete (comma-separated numbers, or `a` for all), `q` quit, or type a number to jump. Up to 20 bookmarks are stored in `~/.config/goto/bookmarks`.
+
+> Needs the `alias goto='. goto'` line in `~/.bashrc` (the installer adds it). Open a new shell after installing.
+
+### `sddm-guest` — show or hide a guest account on the SDDM login screen
+
+Needs root. Defaults to the user `guest` and the `toggle` action.
+
+```bash
+sudo sddm-guest                # toggle (hide if visible, show if hidden)
+sudo sddm-guest status         # show the current state
+sudo sddm-guest hide           # hide from the login screen
+sudo sddm-guest unhide         # show on the login screen (creates the user if missing)
+sudo sddm-guest guest2 hide    # operate on a different user
+```
+
+> `unhide` creates the account with password `guest` if it does not exist.
+
+### `agy-auth` — switch the antigravity-cli authentication mode
+
+Switches `antigravity` between a Google AI Studio API key and Google OAuth, then launches `agy`.
+
+```bash
+agy-auth api      # use an API key (reads GEMINI_API_KEY, or prompts silently)
+agy-auth oauth    # use Google OAuth
+```
+
+For API mode you can export the key first:
+
+```bash
+export GEMINI_API_KEY=your_key_here
+agy-auth api
+```
+
+Extra flags are passed through to `agy`, e.g. `agy-auth api --some-flag`.
+
+> Never pass the key as a command argument — it would be saved to your shell history.
+
+## Requirements
+
+- openSUSE (`zypper`) for `pkg-update`; Flatpak optional
+- `curl` or `wget`, plus `tar`, for install/update
+- `python3` for `agy-auth`
+- Steam for `proton-reset`, SDDM for `sddm-guest`
+- `wget`, `unzip`, and `fc-cache` for `install-win-fonts`
 
 ## Repository Structure
 
