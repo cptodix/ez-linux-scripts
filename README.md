@@ -1,6 +1,6 @@
 # ez-linux-scripts
 
-A collection of personal utility and automation scripts for openSUSE and Linux, built for quick terminal use and desktop integration.
+A collection of utility and automation scripts for openSUSE and Linux, built for quick terminal use and desktop integration.
 
 No cloning needed — installation and updates pull straight from the remote repository.
 
