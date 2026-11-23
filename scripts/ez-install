@@ -69,26 +69,46 @@ if [[ "$filename" == *.AppImage ]] || [[ "$filename" == *.appimage ]]; then
         EMBEDDED_CATEGORIES=$(grep -m1 '^Categories=' "$embedded_desktop" 2>/dev/null | cut -d= -f2- | tr -d ' \r' || true)
     fi
     
-    # Icon: prefer the one referenced by the embedded .desktop
+    # Icon: prefer the one referenced by the embedded .desktop.
+    # Only match real image files — never a bare binary that shares the icon
+    # name (e.g. Icon=wiz_app plus a "wiz_app" executable).
     icon_path=""
     if [ -n "$embedded_desktop" ]; then
         icon_ref=$(grep -m1 '^Icon=' "$embedded_desktop" 2>/dev/null | cut -d= -f2- | tr -d ' \r' || true)
         if [ -n "$icon_ref" ]; then
             icon_base=$(basename "$icon_ref")
-            icon_path=$(find "$extracted_root" -type f \( -name "$icon_base" -o -name "$icon_base.png" -o -name "$icon_base.svg" -o -name "$icon_base.xpm" \) 2>/dev/null | head -1 || true)
+            case "$icon_base" in
+                *.png|*.svg|*.xpm|*.ico)
+                    icon_path=$(find "$extracted_root" -type f -name "$icon_base" 2>/dev/null | head -1 || true)
+                    ;;
+                *)
+                    icon_path=$(find "$extracted_root" -type f \( -name "$icon_base.png" -o -name "$icon_base.svg" -o -name "$icon_base.xpm" -o -name "$icon_base.ico" \) 2>/dev/null | head -1 || true)
+                    ;;
+            esac
         fi
     fi
-    [ -z "$icon_path" ] && icon_path=$(find "$extracted_root" -type f \( -name '*.png' -o -name '*.svg' \) 2>/dev/null | sort -r | head -1 || true)
+    # Fallback: any image file inside the AppImage
+    [ -z "$icon_path" ] && icon_path=$(find "$extracted_root" -type f \( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \) 2>/dev/null | sort -r | head -1 || true)
     
-    # Copy the icon to a persistent location (the extraction temp dir is removed on exit)
+    # Copy the icon to a persistent location (the extraction temp dir is removed on exit).
+    # Only persist recognised image extensions; skip anything else so a bad match
+    # can't abort the install or write a broken Icon= path.
     if [ -n "$icon_path" ]; then
-        icons_dir="$SHARE_DIR/icons"
-        mkdir -p "$icons_dir"
         icon_ext="${icon_path##*.}"
-        persisted_icon="$icons_dir/${app_slug}.${icon_ext}"
-        cp -f "$icon_path" "$persisted_icon"
-        icon_path="$persisted_icon"
-        echo " -> Found icon: $persisted_icon"
+        case "$icon_ext" in
+            png|svg|xpm|ico)
+                icons_dir="$SHARE_DIR/icons"
+                mkdir -p "$icons_dir"
+                persisted_icon="$icons_dir/${app_slug}.${icon_ext}"
+                cp -f "$icon_path" "$persisted_icon"
+                icon_path="$persisted_icon"
+                echo " -> Found icon: $persisted_icon"
+                ;;
+            *)
+                echo " -> Ignoring non-image icon candidate: $icon_path"
+                icon_path=""
+                ;;
+        esac
     else
         echo " -> No icon found in AppImage."
     fi
